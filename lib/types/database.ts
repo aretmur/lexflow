@@ -247,6 +247,23 @@ export type FundingReceipt = {
   created_at: string;
 };
 
+export type GeneratedAgreementPack = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  agreement_version_id: string;
+  version_number: number;
+  generated_at: string;
+  generated_by: string;
+  template_key: string;
+  template_version: string;
+  required_attachment_id: string;
+  storage_path: string;
+  sha256: string;
+  page_count: number;
+  byte_size: number;
+};
+
 export type AuditEvent = {
   id: string;
   firm_id: string;
@@ -354,6 +371,14 @@ export type Database = {
         FundingReceipt,
         Omit<FundingReceipt, "id" | "created_at"> & { id?: string; created_at?: string },
         Partial<FundingReceipt>
+      >;
+      generated_agreement_packs: Table<
+        GeneratedAgreementPack,
+        Omit<GeneratedAgreementPack, "id" | "generated_at"> & {
+          id?: string;
+          generated_at?: string;
+        },
+        Partial<GeneratedAgreementPack>
       >;
       audit_events: Table<
         AuditEvent,

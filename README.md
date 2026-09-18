@@ -55,8 +55,9 @@ Run these SQL files in order against the Supabase project (SQL editor or `supaba
 
 1. `supabase/migrations/20260918120000_init_lexflow.sql`
 2. `supabase/migrations/20260918140000_agreement_workflow.sql`
+3. `supabase/migrations/20260918150000_generated_agreement_packs.sql`
 
-The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store.
+The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store. The third adds immutable generated agreement packs and the private `generated-agreements` storage bucket.
 
 ### 5. Auth settings
 

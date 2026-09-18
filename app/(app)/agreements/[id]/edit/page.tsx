@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireFirm } from "@/lib/auth/session";
 import { isUuid } from "@/lib/constants";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -26,6 +26,9 @@ export default async function EditAgreementPage({
   const bundle = await loadAgreementBundle(firm.id, id);
   if (!bundle) {
     notFound();
+  }
+  if (bundle.agreement.status !== "draft") {
+    redirect(`/agreements/${id}`);
   }
 
   const supabase = await createServerSupabaseClient();

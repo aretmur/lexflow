@@ -7,6 +7,7 @@ import {
   reopenAgreementDraftAction,
   saveAgreementDraftAction,
 } from "@/app/actions/agreements";
+import { generateAgreementAction } from "@/app/actions/generate-agreement";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LegalReviewNotice } from "@/components/legal-review-notice";
@@ -16,17 +17,28 @@ import {
   calculateStagedPricing,
 } from "@/lib/agreements/pricing";
 import { formatAudFromCents } from "@/lib/money";
+import { formatDocumentDate } from "@/lib/documents/formatters";
 import type { AgreementDraft } from "@/lib/validations";
 import type { Practitioner } from "@/lib/types/database";
+
+export type PackSummary = {
+  versionNumber: number;
+  generatedAt: string;
+  templateVersion: string;
+  attachmentVersion: number | null;
+  pageCount: number;
+};
 
 export function AgreementReview({
   draft,
   status,
   practitioner,
+  pack,
 }: {
   draft: AgreementDraft;
   status: string;
   practitioner: Pick<Practitioner, "full_name" | "title"> | null;
+  pack: PackSummary | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +51,9 @@ export function AgreementReview({
     miscellaneousFeesCents: draft.pricing.miscellaneousFeesCents,
     amountRequestedUpfrontCents: draft.pricing.amountRequestedUpfrontCents,
   });
+  const generated = status === "generated" && pack;
+  const ready = status === "ready";
+  const draftStatus = status === "draft";
 
   async function saveDraft() {
     setPending(true);
@@ -62,16 +77,79 @@ export function AgreementReview({
     router.refresh();
   }
 
+  async function generate() {
+    setPending(true);
+    setError(null);
+    const result = await generateAgreementAction(draft.agreementId);
+    setPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <div className="space-y-10">
       <LegalReviewNotice />
       <div className="flex flex-wrap items-center gap-3">
-        <Badge>{status.replaceAll("_", " ")}</Badge>
+        <Badge tone={generated ? "accent" : ready ? "warning" : "neutral"}>
+          {status.replaceAll("_", " ")}
+        </Badge>
         <span className="text-sm text-ink-muted">
           {template.label} · Victoria · {template.version}
         </span>
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      {generated ? (
+        <section className="space-y-4">
+          <h2 className="font-serif text-xl">Generated pack</h2>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-ink-muted">Version</dt>
+              <dd>Version {pack.versionNumber}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">Generated</dt>
+              <dd>{formatDocumentDate(pack.generatedAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">Template version</dt>
+              <dd>{pack.templateVersion}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">Attachment version</dt>
+              <dd>{pack.attachmentVersion ? `Version ${pack.attachmentVersion}` : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">Pages</dt>
+              <dd>{pack.pageCount}</dd>
+            </div>
+          </dl>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href={`/agreements/${draft.agreementId}/pack`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center border border-rule-strong bg-paper-raised px-4 text-sm font-medium hover:border-ink"
+            >
+              View PDF
+            </a>
+            <a
+              href={`/agreements/${draft.agreementId}/pack?download=1`}
+              className="inline-flex h-10 items-center bg-accent px-4 text-sm font-medium text-paper-raised hover:bg-accent-hover"
+            >
+              Download PDF
+            </a>
+          </div>
+          <iframe
+            title="Generated agreement pack"
+            src={`/agreements/${draft.agreementId}/pack`}
+            className="h-[80vh] w-full border border-rule bg-paper-raised"
+          />
+        </section>
+      ) : null}
 
       <section className="space-y-2">
         <h2 className="font-serif text-xl">Client</h2>
@@ -217,19 +295,37 @@ export function AgreementReview({
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => reopenAgreementDraftAction(draft.agreementId)}
-        >
-          Edit
-        </Button>
-        <Button type="button" variant="secondary" onClick={saveDraft} disabled={pending}>
-          Save draft
-        </Button>
-        <Button type="button" onClick={markReady} disabled={pending}>
-          Mark ready
-        </Button>
+        {draftStatus ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => reopenAgreementDraftAction(draft.agreementId)}
+            >
+              Edit
+            </Button>
+            <Button type="button" variant="secondary" onClick={saveDraft} disabled={pending}>
+              Save draft
+            </Button>
+            <Button type="button" onClick={markReady} disabled={pending}>
+              Mark ready
+            </Button>
+          </>
+        ) : null}
+        {ready ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => reopenAgreementDraftAction(draft.agreementId)}
+            >
+              Edit
+            </Button>
+            <Button type="button" onClick={generate} disabled={pending}>
+              Generate agreement
+            </Button>
+          </>
+        ) : null}
       </div>
     </div>
   );

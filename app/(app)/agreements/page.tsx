@@ -50,7 +50,7 @@ export default async function AgreementsPage() {
     <div className="space-y-8">
       <PageHeader
         title="Agreements"
-        description="Victorian short-form and staged costs agreements. Generation and signing are not yet available."
+        description="Victorian short-form and staged costs agreements. Generate a pack from a frozen snapshot. Signing is not yet available."
         actions={
           <Link
             href="/agreements/new"
