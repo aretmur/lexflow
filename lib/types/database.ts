@@ -1,3 +1,4 @@
+import type { AgreementType } from "@/lib/agreements/constants";
 import type {
   AgreementStatus,
   AgreementVersionStatus,
@@ -12,6 +13,8 @@ import type {
   TemplateStatus,
 } from "@/lib/types/enums";
 
+type EmptyRelationships = [];
+
 export type Firm = {
   id: string;
   name: string;
@@ -19,11 +22,20 @@ export type Firm = {
   abn: string | null;
   email: string | null;
   phone: string | null;
+  website: string | null;
+  jurisdiction: Jurisdiction;
+  logo_path: string | null;
   address_line1: string | null;
   address_line2: string | null;
   suburb: string | null;
   state: string | null;
   postcode: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  bsb: string | null;
+  account_number: string | null;
+  payment_reference_prefix: string | null;
+  cyber_fraud_contact_phone: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -51,7 +63,10 @@ export type Practitioner = {
   full_name: string;
   email: string | null;
   title: string | null;
+  mobile: string | null;
   practising_certificate_number: string | null;
+  default_hourly_rate_cents: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -80,6 +95,7 @@ export type Matter = {
   matter_number: string;
   matter_title: string;
   matter_description: string | null;
+  instructions_date: string | null;
   jurisdiction: Jurisdiction;
   practice_area: string | null;
   pricing_type: PricingType;
@@ -110,7 +126,13 @@ export type CostsAgreement = {
   firm_id: string;
   matter_id: string;
   template_id: string | null;
+  agreement_type: AgreementType;
+  jurisdiction: Jurisdiction;
+  template_key: string;
+  template_version: string;
   status: AgreementStatus;
+  snapshot_frozen_at: string | null;
+  required_attachment_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -124,6 +146,78 @@ export type AgreementVersion = {
   snapshot: Record<string, unknown>;
   executed_at: string | null;
   created_at: string;
+};
+
+export type AgreementPricing = {
+  costs_agreement_id: string;
+  firm_id: string;
+  hourly_rate_cents: number;
+  professional_fees_ex_gst_cents: number;
+  discount_cents: number;
+  disbursements_cents: number;
+  miscellaneous_fees_cents: number;
+  amount_requested_upfront_cents: number;
+  subtotal_ex_gst_cents: number;
+  gst_cents: number;
+  total_incl_gst_cents: number;
+  total_estimate_cents: number;
+  principal_lawyer_rate_cents: number;
+  special_counsel_rate_cents: number;
+  senior_lawyer_rate_cents: number;
+  lawyer_rate_cents: number;
+  paralegal_rate_cents: number;
+  senior_counsel_hourly_min_cents: number;
+  senior_counsel_hourly_max_cents: number;
+  senior_counsel_daily_min_cents: number;
+  senior_counsel_daily_max_cents: number;
+  junior_counsel_hourly_min_cents: number;
+  junior_counsel_hourly_max_cents: number;
+  junior_counsel_daily_min_cents: number;
+  junior_counsel_daily_max_cents: number;
+  general_scope_statement: string | null;
+  exclusions: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgreementStage = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  position: number;
+  stage_number: number;
+  title: string;
+  timing: string | null;
+  solicitor_cost_estimate_cents: number;
+  consultant_estimate_cents: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgreementScopeItem = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  stage_id: string | null;
+  position: number;
+  body: string;
+  created_at: string;
+};
+
+export type RequiredAttachment = {
+  id: string;
+  firm_id: string;
+  title: string;
+  version: number;
+  storage_path: string;
+  original_filename: string;
+  content_type: string;
+  byte_size: number;
+  is_active: boolean;
+  uploaded_by: string;
+  uploaded_at: string;
+  used_at: string | null;
 };
 
 export type FundingRequest = {
@@ -164,118 +258,108 @@ export type AuditEvent = {
   created_at: string;
 };
 
-type EmptyRelationships = [];
+type Table<Row, Insert, Update> = {
+  Row: Row;
+  Insert: Insert;
+  Update: Update;
+  Relationships: EmptyRelationships;
+};
 
 export type Database = {
   public: {
     Tables: {
-      firms: {
-        Row: Firm;
-        Insert: Partial<Firm> & Pick<Firm, "name">;
-        Update: Partial<Firm>;
-        Relationships: EmptyRelationships;
-      };
-      users: {
-        Row: UserProfile;
-        Insert: Pick<UserProfile, "id" | "email"> & Partial<UserProfile>;
-        Update: Partial<Pick<UserProfile, "email" | "full_name">>;
-        Relationships: EmptyRelationships;
-      };
-      firm_memberships: {
-        Row: FirmMembership;
-        Insert: Omit<FirmMembership, "id" | "created_at"> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Pick<FirmMembership, "role">>;
-        Relationships: EmptyRelationships;
-      };
-      practitioners: {
-        Row: Practitioner;
-        Insert: Omit<Practitioner, "id" | "created_at" | "updated_at"> & {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Practitioner>;
-        Relationships: EmptyRelationships;
-      };
-      clients: {
-        Row: Client;
-        Insert: Omit<Client, "id" | "created_at" | "updated_at"> & {
+      firms: Table<Firm, Partial<Firm> & Pick<Firm, "name">, Partial<Firm>>;
+      users: Table<
+        UserProfile,
+        Pick<UserProfile, "id" | "email"> & Partial<UserProfile>,
+        Partial<Pick<UserProfile, "email" | "full_name">>
+      >;
+      firm_memberships: Table<
+        FirmMembership,
+        Omit<FirmMembership, "id" | "created_at"> & { id?: string; created_at?: string },
+        Partial<Pick<FirmMembership, "role">>
+      >;
+      practitioners: Table<
+        Practitioner,
+        Partial<Practitioner> & Pick<Practitioner, "firm_id" | "full_name">,
+        Partial<Practitioner>
+      >;
+      clients: Table<
+        Client,
+        Partial<Client> & Pick<Client, "firm_id" | "display_name">,
+        Partial<Client>
+      >;
+      matters: Table<
+        Matter,
+        Omit<Matter, "id" | "created_at" | "updated_at" | "instructions_date"> & {
           id?: string;
           created_at?: string;
           updated_at?: string;
-        };
-        Update: Partial<Client>;
-        Relationships: EmptyRelationships;
-      };
-      matters: {
-        Row: Matter;
-        Insert: Omit<Matter, "id" | "created_at" | "updated_at"> & {
+          instructions_date?: string | null;
+        },
+        Partial<Matter>
+      >;
+      legal_templates: Table<
+        LegalTemplate,
+        Omit<LegalTemplate, "id" | "created_at" | "updated_at"> & {
           id?: string;
           created_at?: string;
           updated_at?: string;
-        };
-        Update: Partial<Matter>;
-        Relationships: EmptyRelationships;
-      };
-      legal_templates: {
-        Row: LegalTemplate;
-        Insert: Omit<LegalTemplate, "id" | "created_at" | "updated_at"> & {
-          id?: string;
+        },
+        Partial<LegalTemplate>
+      >;
+      costs_agreements: Table<
+        CostsAgreement,
+        Partial<CostsAgreement> & Pick<CostsAgreement, "firm_id" | "matter_id">,
+        Partial<CostsAgreement>
+      >;
+      agreement_versions: Table<
+        AgreementVersion,
+        Omit<AgreementVersion, "id" | "created_at"> & { id?: string; created_at?: string },
+        Partial<AgreementVersion>
+      >;
+      agreement_pricing: Table<
+        AgreementPricing,
+        Partial<AgreementPricing> & Pick<AgreementPricing, "costs_agreement_id" | "firm_id">,
+        Partial<AgreementPricing>
+      >;
+      agreement_stages: Table<
+        AgreementStage,
+        Omit<AgreementStage, "created_at" | "updated_at"> & {
           created_at?: string;
           updated_at?: string;
-        };
-        Update: Partial<LegalTemplate>;
-        Relationships: EmptyRelationships;
-      };
-      costs_agreements: {
-        Row: CostsAgreement;
-        Insert: Omit<CostsAgreement, "id" | "created_at" | "updated_at"> & {
+        },
+        Partial<AgreementStage>
+      >;
+      agreement_scope_items: Table<
+        AgreementScopeItem,
+        Omit<AgreementScopeItem, "created_at"> & { created_at?: string },
+        Partial<AgreementScopeItem>
+      >;
+      required_attachments: Table<
+        RequiredAttachment,
+        Omit<RequiredAttachment, "id" | "uploaded_at" | "used_at"> & {
           id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<CostsAgreement>;
-        Relationships: EmptyRelationships;
-      };
-      agreement_versions: {
-        Row: AgreementVersion;
-        Insert: Omit<AgreementVersion, "id" | "created_at"> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<AgreementVersion>;
-        Relationships: EmptyRelationships;
-      };
-      funding_requests: {
-        Row: FundingRequest;
-        Insert: Omit<FundingRequest, "id" | "created_at"> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<FundingRequest>;
-        Relationships: EmptyRelationships;
-      };
-      funding_receipts: {
-        Row: FundingReceipt;
-        Insert: Omit<FundingReceipt, "id" | "created_at"> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<FundingReceipt>;
-        Relationships: EmptyRelationships;
-      };
-      audit_events: {
-        Row: AuditEvent;
-        Insert: Omit<AuditEvent, "id" | "created_at"> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<AuditEvent>;
-        Relationships: EmptyRelationships;
-      };
+          uploaded_at?: string;
+          used_at?: string | null;
+        },
+        Partial<RequiredAttachment>
+      >;
+      funding_requests: Table<
+        FundingRequest,
+        Omit<FundingRequest, "id" | "created_at"> & { id?: string; created_at?: string },
+        Partial<FundingRequest>
+      >;
+      funding_receipts: Table<
+        FundingReceipt,
+        Omit<FundingReceipt, "id" | "created_at"> & { id?: string; created_at?: string },
+        Partial<FundingReceipt>
+      >;
+      audit_events: Table<
+        AuditEvent,
+        Omit<AuditEvent, "id" | "created_at"> & { id?: string; created_at?: string },
+        Partial<AuditEvent>
+      >;
     };
     Views: Record<string, never>;
     Functions: {

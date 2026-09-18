@@ -49,22 +49,14 @@ Set:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (RLS-enforced) |
 | `NEXT_PUBLIC_SITE_URL` | App origin for auth redirects (`http://localhost:3000` locally) |
 
-### 4. Run the database migration
+### 4. Run the database migrations
 
-This repository ships one initial migration:
+Run these SQL files in order against the Supabase project (SQL editor or `supabase db push`):
 
-`supabase/migrations/20260918120000_init_lexflow.sql`
+1. `supabase/migrations/20260918120000_init_lexflow.sql`
+2. `supabase/migrations/20260918140000_agreement_workflow.sql`
 
-Either:
-
-- Paste and run that file in the Supabase SQL editor, or
-- If the Supabase CLI is installed and linked:
-
-```bash
-supabase db push
-```
-
-The migration creates firm-scoped tables, integer-cent money columns, row-level security, immutability triggers for signed agreement versions and funding receipts, and `create_firm` for first-time tenancy.
+The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store.
 
 ### 5. Auth settings
 

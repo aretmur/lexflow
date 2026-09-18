@@ -12,7 +12,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string | string[]; error?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const next = typeof params.next === "string" ? params.next : "/dashboard";
+  const next = typeof params.next === "string" ? params.next : "/agreements";
   const authError = params.error === "auth";
 
   return (

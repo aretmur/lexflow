@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/layout/app-shell";
+import { ConnectionNotice } from "@/components/layout/connection-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function AuthenticatedLayout({
       firmName={context.firm?.practice_name ?? context.firm?.name ?? null}
       userEmail={context.user.email}
     >
+      <ConnectionNotice />
       {children}
     </AppShell>
   );

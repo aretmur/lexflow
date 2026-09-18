@@ -14,7 +14,7 @@ function nextPath(formData: FormData) {
   if (typeof next === "string" && next.startsWith("/") && !next.startsWith("//")) {
     return next;
   }
-  return "/dashboard";
+  return "/agreements";
 }
 
 export async function loginAction(

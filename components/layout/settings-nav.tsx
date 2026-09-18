@@ -7,14 +7,15 @@ import { cn } from "@/lib/cn";
 const SETTINGS_LINKS = [
   { href: "/settings/firm", label: "Firm" },
   { href: "/settings/practitioners", label: "Practitioners" },
-  { href: "/settings/templates", label: "Templates" },
+  { href: "/settings/payment", label: "Trust / payment" },
+  { href: "/settings/attachment", label: "Required attachment" },
 ] as const;
 
 export function SettingsNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-6 border-b border-rule">
+    <nav className="flex gap-6 overflow-x-auto border-b border-rule">
       {SETTINGS_LINKS.map((link) => {
         const active = pathname === link.href;
         return (
@@ -22,7 +23,7 @@ export function SettingsNav() {
             key={link.href}
             href={link.href}
             className={cn(
-              "border-b-2 py-3 text-sm",
+              "shrink-0 border-b-2 py-3 text-sm",
               active
                 ? "border-ink text-ink"
                 : "border-transparent text-ink-muted hover:text-ink",

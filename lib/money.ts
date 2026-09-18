@@ -68,3 +68,30 @@ export function parseAudToCents(input: string): Cents {
 
   return negative ? -cents : cents;
 }
+
+export function parseOptionalAudToCents(input: string): Cents {
+  if (!input.trim()) {
+    return 0;
+  }
+  return assertNonNegativeCents(parseAudToCents(input), "amount");
+}
+
+export function centsToInputString(cents: Cents): string {
+  const amount = assertNonNegativeCents(cents);
+  if (amount === 0) {
+    return "";
+  }
+  const dollars = Math.floor(amount / 100);
+  const remainder = amount % 100;
+  if (remainder === 0) {
+    return String(dollars);
+  }
+  return `${dollars}.${remainder.toString().padStart(2, "0")}`;
+}
+
+export function gstCentsOnExclusive(exclusiveCents: Cents): Cents {
+  const amount = assertNonNegativeCents(exclusiveCents, "exclusive amount");
+  const remainder = amount % 10;
+  const base = (amount - remainder) / 10;
+  return remainder >= 5 ? base + 1 : base;
+}

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Table, Td, Th } from "@/components/ui/table";
+import { VICTORIAN_TEMPLATES } from "@/lib/agreements/constants";
 
 export const metadata: Metadata = {
   title: "Agreements",
@@ -16,7 +17,7 @@ export default async function AgreementsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: agreements, error } = await supabase
     .from("costs_agreements")
-    .select("id, status, updated_at, matter_id")
+    .select("id, status, updated_at, matter_id, agreement_type")
     .eq("firm_id", firm.id)
     .order("updated_at", { ascending: false });
 
@@ -49,20 +50,20 @@ export default async function AgreementsPage() {
     <div className="space-y-8">
       <PageHeader
         title="Agreements"
-        description="Costs agreements for the firm. Generation, sending and signing are not yet available."
+        description="Victorian short-form and staged costs agreements. Generation and signing are not yet available."
         actions={
           <Link
             href="/agreements/new"
-            className="inline-flex h-10 items-center border border-rule-strong bg-paper-raised px-4 text-sm font-medium"
+            className="inline-flex h-10 items-center bg-accent px-4 text-sm font-medium text-paper-raised hover:bg-accent-hover"
           >
-            New agreement
+            New Agreement
           </Link>
         }
       />
       {!agreements?.length ? (
         <EmptyState
-          title="No costs agreements"
-          description="Agreements will appear here after they are created from a matter."
+          title="No agreements yet"
+          description="Create a short-form or full/staged agreement. Client and matter details are collected in that flow."
         />
       ) : (
         <Table>
@@ -70,8 +71,8 @@ export default async function AgreementsPage() {
             <tr>
               <Th>Client</Th>
               <Th>Matter</Th>
+              <Th>Type</Th>
               <Th>Status</Th>
-              <Th>Updated</Th>
             </tr>
           </thead>
           <tbody>
@@ -81,27 +82,17 @@ export default async function AgreementsPage() {
               return (
                 <tr key={agreement.id}>
                   <Td>
-                    {client ? (
-                      <Link href={`/clients/${client.id}`} className="hover:underline">
-                        {client.display_name}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
+                    <Link href={`/agreements/${agreement.id}`} className="hover:underline">
+                      {client?.display_name ?? "—"}
+                    </Link>
                   </Td>
                   <Td>
-                    {matter ? (
-                      <Link href={`/matters/${matter.id}`} className="hover:underline">
-                        {matter.matter_number} · {matter.matter_title}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
+                    {matter ? `${matter.matter_number} · ${matter.matter_title}` : "—"}
                   </Td>
+                  <Td>{VICTORIAN_TEMPLATES[agreement.agreement_type].label}</Td>
                   <Td>
                     <Badge>{agreement.status.replaceAll("_", " ")}</Badge>
                   </Td>
-                  <Td>{new Date(agreement.updated_at).toLocaleDateString("en-AU")}</Td>
                 </tr>
               );
             })}

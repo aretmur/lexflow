@@ -46,13 +46,18 @@ export const MATTER_STATUSES = [
 ] as const;
 export type MatterStatus = (typeof MATTER_STATUSES)[number];
 
+export const AGREEMENT_TYPES = ["short_form", "full_staged"] as const;
+export type AgreementType = (typeof AGREEMENT_TYPES)[number];
+
 export const AGREEMENT_STATUSES = [
   "draft",
-  "ready_to_send",
+  "ready",
+  "generated",
   "sent",
   "viewed",
   "signed",
   "declined",
+  "cancelled",
   "superseded",
 ] as const;
 export type AgreementStatus = (typeof AGREEMENT_STATUSES)[number];
@@ -101,7 +106,7 @@ export const AGREEMENTS_AWAITING_SIGNATURE_STATUSES = [
 
 export const AGREEMENTS_REQUIRING_ATTENTION_STATUSES = [
   "draft",
-  "ready_to_send",
+  "ready",
   "sent",
   "viewed",
   "declined",

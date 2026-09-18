@@ -7,9 +7,6 @@ import { cn } from "@/lib/cn";
 import { logoutAction } from "@/app/actions/auth";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/matters", label: "Matters" },
-  { href: "/clients", label: "Clients" },
   { href: "/agreements", label: "Agreements" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -32,12 +29,22 @@ export function Sidebar({
         </p>
       </div>
 
+      <div className="px-4 pb-4">
+        <Link
+          href="/agreements/new"
+          className="flex h-10 items-center justify-center bg-accent px-3 text-sm font-medium text-paper-raised hover:bg-accent-hover"
+        >
+          New Agreement
+        </Link>
+      </div>
+
       <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col lg:overflow-visible lg:px-4">
         {NAV_ITEMS.map((item) => {
           const active =
             item.href === "/settings"
               ? pathname.startsWith("/settings")
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              : pathname === item.href ||
+                (pathname.startsWith("/agreements") && item.href === "/agreements" && pathname !== "/agreements/new");
 
           return (
             <Link
