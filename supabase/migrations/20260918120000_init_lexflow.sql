@@ -18,37 +18,6 @@ begin
 end;
 $$;
 
-create or replace function public.is_firm_member(_firm_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.firm_memberships
-    where firm_id = _firm_id
-      and user_id = auth.uid()
-  );
-$$;
-
-create or replace function public.has_firm_role(_firm_id uuid, _roles text[])
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.firm_memberships
-    where firm_id = _firm_id
-      and user_id = auth.uid()
-      and role = any (_roles)
-  );
-$$;
-
 create or replace function public.forbid_mutation()
 returns trigger
 language plpgsql
@@ -134,6 +103,39 @@ create table public.firm_memberships (
 
 create index firm_memberships_user_id_idx on public.firm_memberships (user_id);
 create index firm_memberships_firm_id_idx on public.firm_memberships (firm_id);
+
+-- SQL-language helpers are validated at create time, so they must follow
+-- public.firm_memberships. Behaviour is unchanged.
+create or replace function public.is_firm_member(_firm_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.firm_memberships
+    where firm_id = _firm_id
+      and user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.has_firm_role(_firm_id uuid, _roles text[])
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.firm_memberships
+    where firm_id = _firm_id
+      and user_id = auth.uid()
+      and role = any (_roles)
+  );
+$$;
 
 -- ---------------------------------------------------------------------------
 -- practitioners
