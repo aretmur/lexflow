@@ -32,7 +32,7 @@ npm install
 In the [Supabase dashboard](https://supabase.com/dashboard):
 
 1. Create a project.
-2. Copy the project URL and anon key from **Settings → API**.
+2. Copy the project URL and publishable key (legacy name: anon key) from **Settings → API**.
 3. Disable public service-role use in the app. The service role key must not be added to this Next.js project.
 
 ### 3. Environment variables
@@ -46,7 +46,7 @@ Set:
 | Variable | Purpose |
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (RLS-enforced) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key (RLS-enforced). `NEXT_PUBLIC_SUPABASE_ANON_KEY` still works |
 | `NEXT_PUBLIC_SITE_URL` | App origin for auth redirects (`http://localhost:3000` locally) |
 
 ### 4. Run the database migrations
@@ -87,7 +87,7 @@ npm run build
 ## Deploy on Vercel
 
 1. Import the GitHub repository into Vercel.
-2. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
+2. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
 3. `NEXT_PUBLIC_SITE_URL` must be the production origin, for example `https://lexflow.vercel.app`.
 4. Add the production `/auth/callback` URL in Supabase Auth redirect URLs.
 5. Deploy.

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublishableKey } from "@/lib/constants";
 import type { Database } from "@/lib/types/database";
 
 const PUBLIC_PATHS = new Set(["/login"]);
@@ -13,7 +14,7 @@ function isPublicPath(pathname: string) {
 
 export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = getSupabasePublishableKey();
 
   if (!url || !anonKey) {
     return NextResponse.next({ request });
