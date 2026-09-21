@@ -115,6 +115,23 @@ describe("email provider selection", () => {
     expect(getEmailProvider()).toBeInstanceOf(ResendEmailProvider);
   });
 
+  it("uses Microsoft Graph in production when Microsoft configuration is present", () => {
+    clearEmailConfig();
+    process.env.VERCEL_ENV = "production";
+    process.env.MICROSOFT_TENANT_ID = "tenant-id";
+    process.env.MICROSOFT_CLIENT_ID = "client-id";
+    process.env.MICROSOFT_CLIENT_SECRET = "client-secret";
+    process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
+    expect(getEmailProvider()).toBeInstanceOf(MicrosoftGraphEmailProvider);
+  });
+
+  it("fails with the Microsoft configuration error when production has incomplete Microsoft env", () => {
+    clearEmailConfig();
+    process.env.VERCEL_ENV = "production";
+    process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
+    expect(() => getEmailProvider()).toThrow(MICROSOFT_EMAIL_NOT_CONFIGURED);
+  });
+
   it("uses the console provider when EMAIL_PROVIDER=console", () => {
     process.env.RESEND_API_KEY = "re_test";
     process.env.EMAIL_FROM = "Octagon Legal <intake@octagonlegal.au>";

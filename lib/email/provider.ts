@@ -1,10 +1,15 @@
 import {
   getConfiguredEmailProviderName,
+  hasAnyMicrosoftGraphEnv,
   hasMicrosoftGraphConfig,
   hasResendConfig,
   isProductionEmailRequired,
 } from "@/lib/email/config";
-import { EMAIL_NOT_CONFIGURED, EmailProviderError } from "@/lib/email/errors";
+import {
+  EMAIL_NOT_CONFIGURED,
+  MICROSOFT_EMAIL_NOT_CONFIGURED,
+  EmailProviderError,
+} from "@/lib/email/errors";
 import { MicrosoftGraphEmailProvider } from "@/lib/email/graph";
 import { ResendEmailProvider } from "@/lib/email/resend";
 import type { EmailMessage, EmailProvider, EmailSendResult } from "@/lib/email/types";
@@ -49,15 +54,17 @@ export function getEmailProvider(): EmailProvider {
     return ResendEmailProvider.fromEnv();
   }
 
-  if (isProductionEmailRequired()) {
-    throw new EmailProviderError(EMAIL_NOT_CONFIGURED);
-  }
-
   if (hasMicrosoftGraphConfig()) {
     return MicrosoftGraphEmailProvider.fromEnv();
   }
   if (hasResendConfig()) {
     return ResendEmailProvider.fromEnv();
+  }
+  if (isProductionEmailRequired()) {
+    if (hasAnyMicrosoftGraphEnv()) {
+      throw new EmailProviderError(MICROSOFT_EMAIL_NOT_CONFIGURED);
+    }
+    throw new EmailProviderError(EMAIL_NOT_CONFIGURED);
   }
   return new ConsoleEmailProvider();
 }

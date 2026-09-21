@@ -69,6 +69,15 @@ export function hasMicrosoftGraphConfig() {
   );
 }
 
+export function hasAnyMicrosoftGraphEnv() {
+  return Boolean(
+    getMicrosoftTenantId() ||
+      getMicrosoftClientId() ||
+      getMicrosoftClientSecret() ||
+      getMicrosoftGraphSender(),
+  );
+}
+
 export function normalizeEmail(value?: string | null) {
   return value?.trim().toLowerCase() || "";
 }
