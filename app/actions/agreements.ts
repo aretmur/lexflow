@@ -23,90 +23,61 @@ import {
   emptyToNull,
   firstIssue,
   type AgreementDraft,
+  type FormActionState,
 } from "@/lib/validations";
+import {
+  isNextNavigationError,
+  logServerError,
+  publicActionError,
+} from "@/lib/server-log";
 
-export async function createAgreementDraftAction(formData: FormData) {
+export async function createAgreementDraftAction(
+  _previous: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
   const parsed = agreementTypeSchema.safeParse(formData.get("agreementType"));
   if (!parsed.success) {
-    throw new Error("Choose an agreement type.");
+    return { error: "Unable to create agreement: Choose an agreement type." };
   }
 
-  const id = await createAgreementDraft(parsed.data);
-  redirect(`/agreements/${id}/edit`);
+  try {
+    const id = await createAgreementDraft(parsed.data);
+    revalidatePath("/agreements");
+    redirect(`/agreements/${id}/edit`);
+  } catch (error) {
+    if (isNextNavigationError(error)) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : undefined;
+    return {
+      error: `Unable to create agreement: ${publicActionError(
+        message,
+        "The agreement could not be created.",
+      )}`,
+    };
+  }
 }
 
 export async function createAgreementDraft(type: AgreementType) {
-  const { firm } = await requireFirm();
+  const { firm, user } = await requireFirm();
   const supabase = await createServerSupabaseClient();
-  const template = VICTORIAN_TEMPLATES[type];
-  const draftKey = `DRAFT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-
-  const { data: client, error: clientError } = await supabase
-    .from("clients")
-    .insert({
-      firm_id: firm.id,
-      display_name: "New client",
-      client_type: "individual",
-      state: "VIC",
-    })
-    .select("id")
-    .single();
-
-  if (clientError || !client) {
-    throw new Error(clientError?.message ?? "Unable to create client");
-  }
-
-  const { data: matter, error: matterError } = await supabase
-    .from("matters")
-    .insert({
-      firm_id: firm.id,
-      client_id: client.id,
-      matter_number: draftKey,
-      matter_title: "New matter",
-      matter_description: null,
-      responsible_practitioner_id: null,
-      practice_area: null,
-      jurisdiction: "VIC",
-      pricing_type: type === "short_form" ? "hourly" : "staged_fixed_fee",
-      gst_treatment: "gst_exclusive",
-      status: "draft",
-      agreed_or_estimated_cost_cents: 0,
-    })
-    .select("id")
-    .single();
-
-  if (matterError || !matter) {
-    throw new Error(matterError?.message ?? "Unable to create matter");
-  }
-
-  const { data: agreement, error: agreementError } = await supabase
-    .from("costs_agreements")
-    .insert({
-      firm_id: firm.id,
-      matter_id: matter.id,
-      agreement_type: type,
-      jurisdiction: "VIC",
-      template_key: template.key,
-      template_version: template.version,
-      status: "draft",
-    })
-    .select("id")
-    .single();
-
-  if (agreementError || !agreement) {
-    throw new Error(agreementError?.message ?? "Unable to create agreement");
-  }
-
-  const { error: pricingError } = await supabase.from("agreement_pricing").insert({
-    costs_agreement_id: agreement.id,
-    firm_id: firm.id,
+  const { data, error } = await supabase.rpc("create_agreement_draft", {
+    p_agreement_type: type,
   });
 
-  if (pricingError) {
-    throw new Error(pricingError.message);
+  if (error || !data) {
+    logServerError("create_agreement_draft", {
+      step: "rpc",
+      code: error?.code,
+      message: error?.message,
+      agreementType: type,
+      hasFirm: Boolean(firm.id),
+      hasUser: Boolean(user.id),
+    });
+    throw new Error(error?.message ?? "The agreement could not be created.");
   }
 
-  return agreement.id;
+  return data;
 }
 
 export async function saveAgreementDraftAction(payload: unknown) {

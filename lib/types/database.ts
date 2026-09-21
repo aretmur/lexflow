@@ -392,6 +392,10 @@ export type Database = {
         Args: { p_name: string; p_practice_name?: string | null };
         Returns: Firm;
       };
+      create_agreement_draft: {
+        Args: { p_agreement_type: string };
+        Returns: string;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
