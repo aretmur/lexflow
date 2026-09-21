@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { updateSigningAction } from "@/app/actions/firm";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/cn";
 import type { SignatureProviderName } from "@/lib/types/enums";
@@ -14,10 +15,16 @@ export function SigningForm({
   requirePageInitials,
   requireEmailOtpForQr,
   signingProvider,
+  signingSenderName,
+  signingSenderEmail,
+  signingReplyToEmail,
 }: {
   requirePageInitials: boolean;
   requireEmailOtpForQr: boolean;
   signingProvider: SignatureProviderName;
+  signingSenderName: string;
+  signingSenderEmail: string;
+  signingReplyToEmail: string;
 }) {
   const [state, formAction, pending] = useActionState(updateSigningAction, initialState);
   const [enabled, setEnabled] = useState(requirePageInitials);
@@ -62,6 +69,41 @@ export function SigningForm({
           <Toggle value={otpForQr} onChange={setOtpForQr} />
         </div>
       ) : null}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>SIGNING EMAIL</Label>
+          <p className="text-sm text-ink-muted">
+            Clients receive signing links and verification emails using these
+            details.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="signingSenderName">Sender name</Label>
+          <Input
+            id="signingSenderName"
+            name="signingSenderName"
+            defaultValue={signingSenderName}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="signingSenderEmail">Sender email</Label>
+          <Input
+            id="signingSenderEmail"
+            name="signingSenderEmail"
+            type="email"
+            defaultValue={signingSenderEmail}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="signingReplyToEmail">Reply-to email</Label>
+          <Input
+            id="signingReplyToEmail"
+            name="signingReplyToEmail"
+            type="email"
+            defaultValue={signingReplyToEmail}
+          />
+        </div>
+      </div>
       {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       {state.message ? <p className="text-sm text-ink">{state.message}</p> : null}
       <Button type="submit" disabled={pending}>

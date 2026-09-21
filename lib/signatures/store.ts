@@ -28,7 +28,7 @@ export type InsertSignatureRequestInput = {
   signerEmail: string;
   status: SignatureRequestRecord["status"];
   testMode: boolean;
-  sentAt: string;
+  sentAt: string | null;
   createdBy: string;
   requirePageInitials: boolean;
   initialsFieldCount: number;
@@ -54,6 +54,9 @@ export type InsertSignatureRequestInput = {
   executionPage?: number | null;
   agreementPageCount?: number | null;
   firmDisplayName?: string | null;
+  emailProvider?: string | null;
+  emailMessageId?: string | null;
+  emailSentAt?: string | null;
 };
 
 export type UpdateSignatureRequestInput = Partial<
@@ -86,6 +89,9 @@ export type UpdateSignatureRequestInput = Partial<
     | "signerUserAgent"
     | "signedDocumentSha256"
     | "generatedDocumentSha256"
+    | "emailProvider"
+    | "emailMessageId"
+    | "emailSentAt"
   >
 >;
 
@@ -342,6 +348,9 @@ export function createSupabaseSignatureStore(
           execution_page: input.executionPage ?? null,
           agreement_page_count: input.agreementPageCount ?? null,
           firm_display_name: input.firmDisplayName ?? null,
+          email_provider: input.emailProvider ?? null,
+          email_message_id: input.emailMessageId ?? null,
+          email_sent_at: input.emailSentAt ?? null,
         })
         .select("*")
         .single();
@@ -398,6 +407,9 @@ export function createSupabaseSignatureStore(
       if (patch.generatedDocumentSha256 !== undefined) {
         update.generated_document_sha256 = patch.generatedDocumentSha256;
       }
+      if (patch.emailProvider !== undefined) update.email_provider = patch.emailProvider;
+      if (patch.emailMessageId !== undefined) update.email_message_id = patch.emailMessageId;
+      if (patch.emailSentAt !== undefined) update.email_sent_at = patch.emailSentAt;
 
       const { data, error } = await supabase
         .from("signature_requests")
@@ -562,6 +574,9 @@ function fromRow(row: SignatureRequestRow): SignatureRequestRecord {
     executionPage: row.execution_page ?? null,
     agreementPageCount: row.agreement_page_count ?? null,
     firmDisplayName: row.firm_display_name ?? null,
+    emailProvider: row.email_provider ?? null,
+    emailMessageId: row.email_message_id ?? null,
+    emailSentAt: row.email_sent_at ?? null,
   };
 }
 

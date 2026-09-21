@@ -146,8 +146,8 @@ export function memoryStore(initial?: {
         cancelledAt: null,
         expiredAt: null,
         createdBy: input.createdBy,
-        createdAt: input.sentAt,
-        updatedAt: input.sentAt,
+        createdAt: input.startedAt ?? input.sentAt ?? new Date().toISOString(),
+        updatedAt: input.startedAt ?? input.sentAt ?? new Date().toISOString(),
         requirePageInitials: input.requirePageInitials,
         initialsFieldCount: input.initialsFieldCount,
         pageCount: input.pageCount,
@@ -172,6 +172,9 @@ export function memoryStore(initial?: {
         executionPage: input.executionPage ?? null,
         agreementPageCount: input.agreementPageCount ?? null,
         firmDisplayName: input.firmDisplayName ?? null,
+        emailProvider: input.emailProvider ?? null,
+        emailMessageId: input.emailMessageId ?? null,
+        emailSentAt: input.emailSentAt ?? null,
       };
       state.requests.push(record);
       return record;

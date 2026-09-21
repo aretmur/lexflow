@@ -42,6 +42,9 @@ export type Firm = {
   require_page_initials: boolean;
   signing_provider: SignatureProviderName;
   require_email_otp_for_qr: boolean;
+  signing_sender_name: string | null;
+  signing_sender_email: string | null;
+  signing_reply_to_email: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -320,6 +323,9 @@ export type SignatureRequest = {
   execution_page: number | null;
   agreement_page_count: number | null;
   firm_display_name: string | null;
+  email_provider: string | null;
+  email_message_id: string | null;
+  email_sent_at: string | null;
 };
 
 export type SignatureWebhookEvent = {
@@ -508,6 +514,9 @@ export type Database = {
           | "execution_page"
           | "agreement_page_count"
           | "firm_display_name"
+          | "email_provider"
+          | "email_message_id"
+          | "email_sent_at"
         > & {
           id?: string;
           created_at?: string;
@@ -540,6 +549,9 @@ export type Database = {
           execution_page?: number | null;
           agreement_page_count?: number | null;
           firm_display_name?: string | null;
+          email_provider?: string | null;
+          email_message_id?: string | null;
+          email_sent_at?: string | null;
         },
         Partial<SignatureRequest>
       >;

@@ -87,6 +87,7 @@ export default async function AgreementReviewPage({
                 status: signatureRequest.status,
                 signingMode: signatureRequest.signingMode ?? "email",
                 sentAt: signatureRequest.sentAt,
+                emailSentAt: signatureRequest.emailSentAt,
                 viewedAt: signatureRequest.viewedAt,
                 signedAt: signatureRequest.signedAt,
                 lastError: signatureRequest.lastError,

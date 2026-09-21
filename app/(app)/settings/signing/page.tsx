@@ -27,6 +27,9 @@ export default async function SigningSettingsPage() {
         requirePageInitials={firm.require_page_initials !== false}
         requireEmailOtpForQr={Boolean(firm.require_email_otp_for_qr)}
         signingProvider={firm.signing_provider ?? "native_lexflow"}
+        signingSenderName={firm.signing_sender_name ?? ""}
+        signingSenderEmail={firm.signing_sender_email ?? ""}
+        signingReplyToEmail={firm.signing_reply_to_email ?? ""}
       />
     </div>
   );

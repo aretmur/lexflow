@@ -184,6 +184,9 @@ export async function updateSigningAction(
     requirePageInitials: formData.get("requirePageInitials"),
     requireEmailOtpForQr: formData.get("requireEmailOtpForQr") || "false",
     signingProvider: formData.get("signingProvider") || "native_lexflow",
+    signingSenderName: String(formData.get("signingSenderName") ?? ""),
+    signingSenderEmail: String(formData.get("signingSenderEmail") ?? ""),
+    signingReplyToEmail: String(formData.get("signingReplyToEmail") ?? ""),
   });
 
   if (!parsed.success) {
@@ -193,6 +196,9 @@ export async function updateSigningAction(
   const requirePageInitials = parsed.data.requirePageInitials === "true";
   const requireEmailOtpForQr = parsed.data.requireEmailOtpForQr === "true";
   const signingProvider = parsed.data.signingProvider ?? "native_lexflow";
+  const signingSenderName = emptyToNull(parsed.data.signingSenderName);
+  const signingSenderEmail = emptyToNull(parsed.data.signingSenderEmail);
+  const signingReplyToEmail = emptyToNull(parsed.data.signingReplyToEmail);
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("firms")
@@ -200,6 +206,9 @@ export async function updateSigningAction(
       require_page_initials: requirePageInitials,
       require_email_otp_for_qr: requireEmailOtpForQr,
       signing_provider: signingProvider,
+      signing_sender_name: signingSenderName,
+      signing_sender_email: signingSenderEmail,
+      signing_reply_to_email: signingReplyToEmail,
     })
     .eq("id", context.firm.id);
 
@@ -217,6 +226,9 @@ export async function updateSigningAction(
       requirePageInitials,
       requireEmailOtpForQr,
       signingProvider,
+      signingSenderName,
+      signingSenderEmail,
+      signingReplyToEmail,
     },
   });
 

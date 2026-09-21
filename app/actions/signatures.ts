@@ -10,7 +10,8 @@ import {
 import { getSignatureProvider } from "@/lib/signatures/provider";
 import { signingQrDataUrl } from "@/lib/signatures/qr";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
-import { resendNativeSigningLink, startNativeSigning } from "@/lib/signatures/native-workflow";
+import { firmSigningEmailIdentity } from "@/lib/email/identity";
+import { resendNativeSigningLink, reopenNativeSigningSession, startNativeSigning } from "@/lib/signatures/native-workflow";
 import {
   cancelSignatureRequest,
   refreshEmbeddedSigningSession,
@@ -119,19 +120,26 @@ export async function startSigningAction(
     }
 
     if (providerName === "native_lexflow") {
-      const result = await startNativeSigning({
-        ...shared,
-        provider: { name: "native_lexflow", cancelSignatureRequest: provider.cancelSignatureRequest },
-        firmName: firm.practice_name || firm.name,
-        signingMode: signingMode as "qr" | "email" | "same_device",
-        requireEmailOtpForQr: firm.require_email_otp_for_qr,
-      });
-      refreshAgreement(agreementId);
-      return {
-        ok: true,
-        signingUrl: result.signingUrl,
-        qrDataUrl: await signingQrDataUrl(result.signingUrl),
-      };
+      const identity = firmSigningEmailIdentity(firm);
+      try {
+        const result = await startNativeSigning({
+          ...shared,
+          provider: { name: "native_lexflow", cancelSignatureRequest: provider.cancelSignatureRequest },
+          firmName: identity.displayName,
+          signingMode: signingMode as "qr" | "email" | "same_device",
+          requireEmailOtpForQr: firm.require_email_otp_for_qr,
+          emailReplyTo: identity.replyTo,
+        });
+        refreshAgreement(agreementId);
+        return {
+          ok: true,
+          signingUrl: result.signingUrl,
+          qrDataUrl: await signingQrDataUrl(result.signingUrl),
+        };
+      } catch (error) {
+        refreshAgreement(agreementId);
+        return actionError(error, "Unable to start the signing session.");
+      }
     }
 
     if (signingMode === "email") {
@@ -170,12 +178,21 @@ export async function refreshSigningSessionAction(
     const { firm, user } = await requireFirm();
     const supabase = await createServerSupabaseClient();
     const store = createSupabaseSignatureStore(supabase);
-    const result = await refreshEmbeddedSigningSession({
-      store,
-      firmId: firm.id,
-      agreementId,
-      actorUserId: user.id,
-    });
+    const providerName = firmSigningProvider(firm.signing_provider);
+    const result =
+      providerName === "native_lexflow"
+        ? await reopenNativeSigningSession({
+            store,
+            firmId: firm.id,
+            agreementId,
+            actorUserId: user.id,
+          })
+        : await refreshEmbeddedSigningSession({
+            store,
+            firmId: firm.id,
+            agreementId,
+            actorUserId: user.id,
+          });
     refreshAgreement(agreementId);
     return {
       ok: true,
@@ -196,11 +213,14 @@ export async function resendSignatureRequestAction(
     const store = createSupabaseSignatureStore(supabase);
     const providerName = firmSigningProvider(firm.signing_provider);
     if (providerName === "native_lexflow") {
+      const identity = firmSigningEmailIdentity(firm);
       await resendNativeSigningLink({
         store,
         firmId: firm.id,
         agreementId,
         actorUserId: user.id,
+        firmName: identity.displayName,
+        emailReplyTo: identity.replyTo,
       });
     } else {
       await resendSignatureRequest({

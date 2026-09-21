@@ -24,6 +24,7 @@ export type SignaturePanelRequest = {
   status: string;
   signingMode: SigningMode;
   sentAt: string | null;
+  emailSentAt: string | null;
   viewedAt: string | null;
   signedAt: string | null;
   lastError: string | null;
@@ -85,6 +86,7 @@ export function SignaturePanel({
     setPending(false);
     if (result.error) {
       setActionError(result.error);
+      router.refresh();
       return result;
     }
     if (result.signingUrl) {
@@ -139,12 +141,17 @@ export function SignaturePanel({
     request?.signingMode === "embedded_same_device" ||
     request?.signingMode === "qr" ||
     request?.signingMode === "same_device";
+  const emailNotSent =
+    request != null &&
+    request.signingMode === "email" &&
+    !request.emailSentAt &&
+    !signedDocument;
   const statusLabel = signingStatusLabel(request, Boolean(signedDocument));
 
   return (
     <section className="space-y-4">
       <h2 className="font-serif text-xl">
-        {signed ? "SIGNED ✓" : awaiting ? "Awaiting signature" : "READY TO SIGN"}
+        {signed ? "SIGNED ✓" : emailNotSent ? "EMAIL NOT SENT" : awaiting ? "Awaiting signature" : "READY TO SIGN"}
       </h2>
       {showTestBanner ? (
         <Notice tone="warning">
@@ -236,7 +243,12 @@ export function SignaturePanel({
 
       {awaiting ? (
         <div className="space-y-4">
-          {request.signingMode !== "email" ? (
+          {emailNotSent ? (
+            <p className="text-sm text-danger">
+              {request.lastError ||
+                "Unable to send the signing email. Check the email address or try again."}
+            </p>
+          ) : request.signingMode !== "email" ? (
             <p className="text-sm font-medium">Signing in progress…</p>
           ) : null}
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -248,11 +260,25 @@ export function SignaturePanel({
               <dt className="text-ink-muted">Client</dt>
               <dd>{request.signerName}</dd>
             </div>
+            {request.signingMode === "email" ? (
+              <div>
+                <dt className="text-ink-muted">Email</dt>
+                <dd>{request.signerEmail}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-ink-muted">
                 {request.signingMode === "email" ? "Sent" : "Started"}
               </dt>
-              <dd>{request.sentAt ? formatDocumentDateTime(request.sentAt) : "—"}</dd>
+              <dd>
+                {request.signingMode === "email"
+                  ? request.emailSentAt
+                    ? formatDocumentDateTime(request.emailSentAt)
+                    : "—"
+                  : request.sentAt
+                    ? formatDocumentDateTime(request.sentAt)
+                    : "—"}
+              </dd>
             </div>
             <div>
               <dt className="text-ink-muted">Status</dt>
@@ -309,14 +335,24 @@ export function SignaturePanel({
                 </Button>
               </>
             ) : (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={pending}
-                onClick={() => run(() => resendSignatureRequestAction(agreementId))}
-              >
-                Resend email
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => run(() => resendSignatureRequestAction(agreementId))}
+                >
+                  {emailNotSent ? "Retry email" : "Resend email"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => copyLink()}
+                >
+                  {copied ? "Link copied" : "Copy signing link"}
+                </Button>
+              </>
             )}
             <Button
               type="button"

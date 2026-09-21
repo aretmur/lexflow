@@ -180,6 +180,9 @@ export type SignatureRequestRecord = {
   executionPage: number | null;
   agreementPageCount: number | null;
   firmDisplayName: string | null;
+  emailProvider: string | null;
+  emailMessageId: string | null;
+  emailSentAt: string | null;
 };
 
 export type SignedAgreementDocumentRecord = {

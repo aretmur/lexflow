@@ -2,6 +2,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { ConsoleEmailProvider, setEmailProviderForTests } from "@/lib/email/provider";
+import { EMAIL_SEND_FAILED, EmailProviderError } from "@/lib/email/errors";
+import type { EmailMessage, EmailProvider, EmailSendResult } from "@/lib/email/types";
 import { CONSENT_TEXT_VERSION, consentText } from "@/lib/signatures/consent";
 import { NativeLexflowProvider } from "@/lib/signatures/native";
 import {
@@ -10,6 +12,7 @@ import {
   resolveNativeSigningSession,
   sendNativeSigningOtp,
   startNativeSigning,
+  resendNativeSigningLink,
   verifyNativeSigningOtp,
 } from "@/lib/signatures/native-workflow";
 import { resetRateLimitsForTests } from "@/lib/signatures/rate-limit";
@@ -87,7 +90,7 @@ describe("native Lexflow signing", () => {
 
   it("stores a hashed token and never emails a QR session", async () => {
     const store = createStore();
-    const email = new ConsoleEmailProvider();
+    const email = new MustNotSendEmailProvider();
     setEmailProviderForTests(email);
     const started = await startNativeSigning(startInput(store));
 
@@ -98,7 +101,10 @@ describe("native Lexflow signing", () => {
     expect(JSON.stringify(store.requests[0])).not.toContain(started.token);
     expect(started.request.emailVerifiedAt).toBeTruthy();
     expect(started.request.initiatedByUserId).toBe(USER);
-    expect(email.sent).toHaveLength(0);
+    expect(email.calls).toBe(0);
+    await completeInput(store, started.token);
+    expect(store.requests[0].status).toBe("signed");
+    expect(email.calls).toBe(0);
   });
 
   it("emails a signing link and requires OTP before the pack can be reviewed", async () => {
@@ -107,13 +113,19 @@ describe("native Lexflow signing", () => {
     setEmailProviderForTests(email);
     const started = await startNativeSigning(startInput(store, { signingMode: "email" }));
     expect(email.sent[0]?.text).toContain(started.signingUrl);
+    expect(email.sent[0]?.text).toContain("Example Law has prepared a costs agreement");
+    expect(email.sent[0]?.text).not.toMatch(/assault|GST|disbursement/i);
 
     const beforeOtp = await resolveNativeSigningSession({ store, token: started.token, now });
     expect(beforeOtp.status).toBe("needs_otp");
 
     await sendNativeSigningOtp({ store, token: started.token, now });
-    const code = email.sent.at(-1)?.text.match(/\b(\d{6})\b/)?.[1];
+    const otp = email.sent.at(-1);
+    const code = otp?.text.match(/\b(\d{6})\b/)?.[1];
+    expect(otp?.subject).toBe("Your Lexflow verification code");
     expect(code).toMatch(/^\d{6}$/);
+    expect(otp?.text).toContain(code!);
+    expect(otp?.text).not.toMatch(/assault|theft|GST|disbursement|instruction/i);
     expect(store.requests[0].otpHash).not.toBe(code);
 
     await verifyNativeSigningOtp({ store, token: started.token, code: code!, now });
@@ -127,9 +139,14 @@ describe("native Lexflow signing", () => {
 
   it("records same-device initiation without email OTP by default", async () => {
     const store = createStore();
+    const email = new MustNotSendEmailProvider();
+    setEmailProviderForTests(email);
     const started = await startNativeSigning(startInput(store, { signingMode: "same_device" }));
     const session = await resolveNativeSigningSession({ store, token: started.token, now });
     expect(session.status).toBe("ready");
+    expect(email.calls).toBe(0);
+    await completeInput(store, started.token);
+    expect(store.requests[0].status).toBe("signed");
   });
 
   it("can require email OTP for QR sessions", async () => {
@@ -235,4 +252,69 @@ describe("native Lexflow signing", () => {
     expect(started.request.executionPage).toBe(3);
     expect(started.request.executionPage).not.toBe(5);
   });
+
+  it("does not report Sent when email delivery fails and can retry the same request", async () => {
+    const store = createStore();
+    setEmailProviderForTests(new FailingEmailProvider());
+    await expect(
+      startNativeSigning(startInput(store, { signingMode: "email", firmName: "Octagon Legal" })),
+    ).rejects.toThrow(EMAIL_SEND_FAILED);
+    expect(store.requests).toHaveLength(1);
+    expect(store.requests[0].sentAt).toBeNull();
+    expect(store.requests[0].emailSentAt).toBeNull();
+    expect(store.requests[0].lastError).toBe(EMAIL_SEND_FAILED);
+    expect(store.agreementStatus).toBe("sent");
+
+    const recording = new RecordingEmailProvider();
+    setEmailProviderForTests(recording);
+    await resendNativeSigningLink({
+      store,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      firmName: "Octagon Legal",
+      now,
+    });
+    expect(store.requests).toHaveLength(1);
+    expect(store.requests[0].emailSentAt).toBeTruthy();
+    expect(store.requests[0].emailProvider).toBe("resend");
+    expect(store.requests[0].emailMessageId).toBe("msg_retry");
+    expect(store.requests[0].lastError).toBeNull();
+    expect(recording.sent[0]?.text).toContain("Octagon Legal has prepared a costs agreement");
+  });
+
+  it("records the email provider and message id after acceptance", async () => {
+    const store = createStore();
+    const recording = new RecordingEmailProvider();
+    setEmailProviderForTests(recording);
+    await startNativeSigning(startInput(store, { signingMode: "email" }));
+    expect(store.requests[0].emailProvider).toBe("resend");
+    expect(store.requests[0].emailMessageId).toBe("msg_retry");
+    expect(store.requests[0].emailSentAt).toBeTruthy();
+  });
 });
+
+class MustNotSendEmailProvider implements EmailProvider {
+  readonly name = "must-not-send";
+  calls = 0;
+  async send(): Promise<EmailSendResult> {
+    this.calls += 1;
+    throw new Error("email provider should not be used");
+  }
+}
+
+class FailingEmailProvider implements EmailProvider {
+  readonly name = "fail";
+  async send(): Promise<EmailSendResult> {
+    throw new EmailProviderError(EMAIL_SEND_FAILED);
+  }
+}
+
+class RecordingEmailProvider implements EmailProvider {
+  readonly name = "resend";
+  readonly sent: EmailMessage[] = [];
+  async send(message: EmailMessage): Promise<EmailSendResult> {
+    this.sent.push(message);
+    return { provider: this.name, messageId: "msg_retry" };
+  }
+}

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getEmailProvider } from "@/lib/email/provider";
+import { EMAIL_SEND_FAILED, EmailProviderError, getEmailProvider } from "@/lib/email/provider";
+import { signingLinkEmail, signingOtpEmail } from "@/lib/email/templates";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { signedAgreementStoragePath } from "@/lib/documents/pdf/storage-path";
 import { CONSENT_TEXT_VERSION, consentText } from "@/lib/signatures/consent";
@@ -35,7 +36,6 @@ import {
   prepareSendContext,
   rotateSigningToken,
 } from "@/lib/signatures/workflow";
-import { publicActionError } from "@/lib/server-log";
 
 export const LEGACY_PACK_SIGNING_ERROR =
   "This agreement was generated before signing metadata was added. Create a new agreement version and generate it again before signing.";
@@ -95,6 +95,7 @@ export async function startNativeSigning(input: {
   signingMode: NativeSigningMode;
   requirePageInitials?: boolean;
   requireEmailOtpForQr?: boolean;
+  emailReplyTo?: string | null;
   replaceActive?: boolean;
   now?: Date;
 }) {
@@ -109,7 +110,15 @@ export async function startNativeSigning(input: {
       now: input.now,
     });
     if (input.signingMode === "email") {
-      await sendSigningLinkEmail(signer, rotated.signingUrl);
+      await deliverSigningLinkEmail({
+        store: input.store,
+        request: rotated.request,
+        signer,
+        signingUrl: rotated.signingUrl,
+        firmName: input.firmName,
+        replyTo: input.emailReplyTo,
+        now: input.now,
+      });
     }
     return rotated;
   }
@@ -125,8 +134,9 @@ export async function startNativeSigning(input: {
   const pages = await pageGeometriesFromPdf(packBytes);
   const requirePageInitials = input.requirePageInitials !== false;
   const issued = issueSigningToken(input.now);
-  const sentAt = (input.now ?? new Date()).toISOString();
+  const startedAt = (input.now ?? new Date()).toISOString();
   const providerRequestId = `native_${randomUUID()}`;
+  const emailMode = input.signingMode === "email";
 
   const request = await input.store.insertRequest({
     firmId: context.firmId,
@@ -139,7 +149,7 @@ export async function startNativeSigning(input: {
     signerEmail: signer.email,
     status: "sent",
     testMode: input.testMode,
-    sentAt,
+    sentAt: emailMode ? null : startedAt,
     createdBy: input.actorUserId,
     requirePageInitials,
     initialsFieldCount: requirePageInitials ? pages.length : 0,
@@ -147,14 +157,13 @@ export async function startNativeSigning(input: {
     signingMode: input.signingMode,
     signingTokenHash: issued.hash,
     signingTokenExpiresAt: issued.expiresAt,
-    startedAt: sentAt,
+    startedAt,
     initiatedByUserId: input.actorUserId,
     generatedDocumentSha256: context.packSha256,
     executionPage: executionPageNumber(pageSplit.agreementPageCount, pages.length),
     agreementPageCount: pageSplit.agreementPageCount,
     firmDisplayName: input.firmName,
-    emailVerifiedAt:
-      input.signingMode === "email" || input.requireEmailOtpForQr ? null : sentAt,
+    emailVerifiedAt: emailMode || input.requireEmailOtpForQr ? null : startedAt,
   });
 
   await input.store.updateAgreementStatus(context.firmId, context.agreementId, "sent", [
@@ -179,8 +188,16 @@ export async function startNativeSigning(input: {
   });
 
   const signingUrl = publicSigningUrl(issued.token);
-  if (input.signingMode === "email") {
-    await sendSigningLinkEmail(signer, signingUrl);
+  if (emailMode) {
+    await deliverSigningLinkEmail({
+      store: input.store,
+      request,
+      signer,
+      signingUrl,
+      firmName: input.firmName,
+      replyTo: input.emailReplyTo,
+      now: input.now,
+    });
   }
 
   return { request, token: issued.token, signingUrl };
@@ -270,16 +287,28 @@ export async function sendNativeSigningOtp(input: {
   }
   const code = createOtpCode();
   const now = input.now ?? new Date();
+  const hashed = hashOtpCode(request.id, code);
   await input.store.updateRequest(request.id, {
-    otpHash: hashOtpCode(request.id, code),
+    otpHash: hashed,
     otpExpiresAt: otpExpiresAt(now),
     otpAttemptCount: 0,
-    lastOtpSentAt: now.toISOString(),
   });
-  await getEmailProvider().send({
-    to: request.signerEmail,
-    subject: "Your Lexflow signing code",
-    text: `Your one-time signing code is ${code}. It expires in 10 minutes.`,
+  const message = signingOtpEmail({
+    clientName: request.signerName,
+    firmName: request.firmDisplayName || "Lexflow",
+    code,
+  });
+  try {
+    await getEmailProvider().send({
+      to: request.signerEmail,
+      subject: message.subject,
+      text: message.text,
+    });
+  } catch (error) {
+    throw new SignatureWorkflowError(safeEmailError(error));
+  }
+  await input.store.updateRequest(request.id, {
+    lastOtpSentAt: now.toISOString(),
   });
 }
 
@@ -506,19 +535,42 @@ export async function resendNativeSigningLink(input: {
   firmId: string;
   agreementId: string;
   actorUserId: string;
+  firmName?: string;
+  emailReplyTo?: string | null;
   now?: Date;
 }) {
+  const request = await requireActiveNative(input);
   const rotated = await rotateSigningToken({
+    store: input.store,
+    request,
+    actorUserId: input.actorUserId,
+    now: input.now,
+  });
+  await deliverSigningLinkEmail({
+    store: input.store,
+    request: rotated.request,
+    signer: { name: rotated.request.signerName, email: rotated.request.signerEmail },
+    signingUrl: rotated.signingUrl,
+    firmName: input.firmName || rotated.request.firmDisplayName || "Lexflow",
+    replyTo: input.emailReplyTo,
+    now: input.now,
+  });
+  return rotated;
+}
+
+export async function reopenNativeSigningSession(input: {
+  store: SignatureStore;
+  firmId: string;
+  agreementId: string;
+  actorUserId: string;
+  now?: Date;
+}) {
+  return rotateSigningToken({
     store: input.store,
     request: await requireActiveNative(input),
     actorUserId: input.actorUserId,
     now: input.now,
   });
-  await sendSigningLinkEmail(
-    { name: rotated.request.signerName, email: rotated.request.signerEmail },
-    rotated.signingUrl,
-  );
-  return rotated;
 }
 
 function requiresOtp(request: SignatureRequestRecord) {
@@ -570,19 +622,48 @@ async function requireActiveNative(input: {
   return request;
 }
 
-async function sendSigningLinkEmail(signer: SignatureSigner, signingUrl: string) {
+async function deliverSigningLinkEmail(input: {
+  store: SignatureStore;
+  request: SignatureRequestRecord;
+  signer: SignatureSigner;
+  signingUrl: string;
+  firmName: string;
+  replyTo?: string | null;
+  now?: Date;
+}) {
+  const message = signingLinkEmail({
+    clientName: input.signer.name,
+    firmName: input.firmName,
+    signingUrl: input.signingUrl,
+  });
   try {
-    await getEmailProvider().send({
-      to: signer.email,
-      subject: "Please review and sign your costs agreement",
-      text: `${signer.name},\n\nOpen this secure link to review and sign your costs agreement:\n${signingUrl}\n\nYou do not need a Lexflow account.`,
+    const result = await getEmailProvider().send({
+      to: input.signer.email,
+      subject: message.subject,
+      text: message.text,
+      replyTo: input.replyTo?.trim() || undefined,
+    });
+    const sentAt = (input.now ?? new Date()).toISOString();
+    await input.store.updateRequest(input.request.id, {
+      sentAt,
+      lastError: null,
+      emailProvider: result.provider,
+      emailMessageId: result.messageId,
+      emailSentAt: sentAt,
     });
   } catch (error) {
-    throw new SignatureWorkflowError(
-      publicActionError(
-        error instanceof Error ? error.message : undefined,
-        "Unable to send the signing email.",
-      ),
-    );
+    const safe = safeEmailError(error);
+    await input.store.updateRequest(input.request.id, {
+      lastError: safe,
+      emailSentAt: null,
+    });
+    throw new SignatureWorkflowError(safe);
   }
+}
+
+function safeEmailError(error: unknown) {
+  if (error instanceof EmailProviderError) {
+    return error.message;
+  }
+  return EMAIL_SEND_FAILED;
 }
