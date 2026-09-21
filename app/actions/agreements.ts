@@ -25,6 +25,10 @@ import {
   headlineTotalCents,
 } from "@/lib/agreements/pricing";
 import {
+  hourlyRateCentsForPersist,
+  matterPricingTypeForDraft,
+} from "@/lib/agreements/short-form-pricing";
+import {
   agreementDraftSchema,
   agreementReadySchema,
   agreementTypeSchema,
@@ -295,7 +299,10 @@ async function persistDraft(draft: AgreementDraft) {
       instructions_date: emptyToNull(draft.matter.instructionsDate),
       responsible_practitioner_id: practitionerId,
       agreed_or_estimated_cost_cents: headline,
-      pricing_type: draft.agreementType === "short_form" ? "hourly" : "staged_fixed_fee",
+      pricing_type: matterPricingTypeForDraft(
+        draft.agreementType,
+        draft.matter.pricingType,
+      ),
     })
     .eq("id", bundle.matter.id)
     .eq("firm_id", firm.id);
@@ -322,7 +329,10 @@ async function persistDraft(draft: AgreementDraft) {
   const { error: pricingError } = await supabase
     .from("agreement_pricing")
     .update({
-      hourly_rate_cents: draft.pricing.hourlyRateCents,
+      hourly_rate_cents: hourlyRateCentsForPersist(
+        draft.matter.pricingType,
+        draft.pricing.hourlyRateCents,
+      ),
       professional_fees_ex_gst_cents: draft.pricing.professionalFeesExGstCents,
       discount_cents: draft.pricing.discountCents,
       disbursements_cents: draft.pricing.disbursementsCents,

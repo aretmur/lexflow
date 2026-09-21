@@ -1,22 +1,22 @@
-import { LEGAL_REVIEW_STATUS } from "@/lib/documents/templates/vic/metadata";
-
-export const LEGAL_BANNER = `${LEGAL_REVIEW_STATUS} — Lexflow templates are not approved Victorian (or other Australian) legal drafting. Do not treat this document as approved legal content.`;
-
 export const PRIVATE_AND_CONFIDENTIAL = "Private and Confidential";
 
 export const SHORT_FORM_INTRO = [
   "We confirm that we are instructed to act for you in the matter described below.",
   "This document is a costs agreement and a disclosure of costs under the Legal Profession Uniform Law (Victoria), including section 174(5). It is issued together with the attached information sheet.",
-  LEGAL_BANNER,
 ];
 
-export const SHORT_FORM_BASIS_OF_COSTS =
+export const SHORT_FORM_HOURLY_BASIS_OF_COSTS =
   "Unless a different basis is recorded in this document, our professional fees are calculated by reference to the hourly rate set out below, applied to time reasonably spent on the matter. Amounts are shown in Australian dollars. GST is calculated using Lexflow's integer-cent GST utility (10%, round half up) and is not independently recalculated in this document.";
+
+export const SHORT_FORM_FIXED_FEE_BASIS_OF_COSTS =
+  "The professional fee shown below is a fixed fee for the stated scope of work. Work outside the stated scope may require further costs disclosure and a further costs agreement where applicable. Amounts are shown in Australian dollars. GST is calculated using Lexflow's integer-cent GST utility (10%, round half up) and is not independently recalculated in this document.";
+
+export const SHORT_FORM_BASIS_OF_COSTS = SHORT_FORM_HOURLY_BASIS_OF_COSTS;
 
 export const SHORT_FORM_RIGHTS = [
   "You have rights under the Legal Profession Uniform Law, including rights to negotiate this agreement, to receive a bill, to request an itemised bill, and to seek a costs assessment in accordance with that Law.",
   "You may also have rights to apply to a court or costs assessor to set aside this agreement, and to be notified of any substantial change to the estimated costs.",
-  "This wording is template-controlled and remains UNDER LEGAL REVIEW. It is not a substitute for independent legal advice about your rights.",
+  "This wording is template-controlled. It is not a substitute for independent legal advice about your rights.",
 ];
 
 export const SHORT_FORM_EXECUTION =
@@ -25,7 +25,6 @@ export const SHORT_FORM_EXECUTION =
 export const FULL_STAGED_COVER_INTRO = [
   "We confirm that we are instructed to act for you in the matter described below.",
   "Enclosed is our costs agreement and costs disclosure for this matter, together with the required information sheet. Please read both documents carefully.",
-  LEGAL_BANNER,
 ];
 
 export const FULL_STAGED_AGREEMENT_INTRO = [
@@ -98,7 +97,7 @@ export const FULL_STAGED_SECTIONS: Array<{ heading: string; body: string[] }> = 
     heading: "Litigation risk",
     body: [
       "If the matter involves or may involve litigation, you acknowledge that litigation involves risk, including the risk of an adverse costs order, and that estimates cannot remove that risk.",
-      "This paragraph is general wording only and remains UNDER LEGAL REVIEW.",
+      "This paragraph is general wording only.",
     ],
   },
   {
@@ -117,4 +116,4 @@ export const DISCLOSURE_HEADING =
   "Disclosure of costs — Legal Profession Uniform Law s 174(5)";
 
 export const DISCLOSURE_INTRO =
-  "The following disclosure is provided to the client on the date of this document, using the frozen snapshot. This wording is UNDER LEGAL REVIEW and is not approved Victorian drafting.";
+  "The following disclosure is provided to the client on the date of this document, using the frozen snapshot.";

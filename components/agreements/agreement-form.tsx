@@ -11,12 +11,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { MoneyField } from "@/components/agreements/money-field";
 import { ScopeList } from "@/components/agreements/scope-list";
 import { StageList } from "@/components/agreements/stage-list";
-import { LegalReviewNotice } from "@/components/legal-review-notice";
 import {
   calculateShortFormPricing,
   calculateStagedPricing,
 } from "@/lib/agreements/pricing";
 import { formatAudFromCents } from "@/lib/money";
+import { cn } from "@/lib/cn";
+import {
+  applyShortFormPricingType,
+  shortFormFeeLabel,
+  shouldPopulatePractitionerHourlyRate,
+} from "@/lib/agreements/short-form-pricing";
 import type { Practitioner } from "@/lib/types/database";
 import type { AgreementDraft } from "@/lib/validations";
 
@@ -92,7 +97,6 @@ export function AgreementForm({
           Review
         </Button>
       </div>
-      <LegalReviewNotice />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
       <section className="space-y-4">
@@ -263,7 +267,12 @@ export function AgreementForm({
                     responsiblePractitionerId: event.target.value,
                   },
                   pricing:
-                    isShort && current.pricing.hourlyRateCents === 0 && practitioner
+                    isShort &&
+                    practitioner &&
+                    shouldPopulatePractitionerHourlyRate(
+                      current.matter.pricingType,
+                      current.pricing.hourlyRateCents,
+                    )
                       ? {
                           ...current.pricing,
                           hourlyRateCents: practitioner.default_hourly_rate_cents,
@@ -324,16 +333,51 @@ export function AgreementForm({
       {isShort ? (
         <section className="space-y-4">
           <h2 className="font-serif text-xl">Costs</h2>
+          <div className="space-y-2">
+            <Label>Costs basis</Label>
+            <div className="inline-flex border border-rule-strong">
+              {(["hourly", "fixed_fee"] as const).map((basis) => {
+                const selected = draft.matter.pricingType === basis;
+                return (
+                  <button
+                    key={basis}
+                    type="button"
+                    className={cn(
+                      "h-10 px-4 text-sm font-medium",
+                      selected
+                        ? "bg-accent text-paper-raised"
+                        : "bg-paper-raised text-ink hover:border-ink",
+                    )}
+                    onClick={() => {
+                      const practitioner = practitioners.find(
+                        (item) => item.id === draft.matter.responsiblePractitionerId,
+                      );
+                      setDraft((current) =>
+                        applyShortFormPricingType(
+                          current,
+                          basis,
+                          practitioner?.default_hourly_rate_cents ?? 0,
+                        ),
+                      );
+                    }}
+                  >
+                    {basis === "hourly" ? "Hourly" : "Fixed fee"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <MoneyField
               id="hourlyRate"
               label="Hourly rate"
               valueCents={draft.pricing.hourlyRateCents}
+              disabled={draft.matter.pricingType === "fixed_fee"}
               onChange={(value) => updatePricing("hourlyRateCents", value)}
             />
             <MoneyField
               id="fees"
-              label="Estimated professional fees excl GST"
+              label={shortFormFeeLabel(draft.matter.pricingType)}
               valueCents={draft.pricing.professionalFeesExGstCents}
               onChange={(value) => updatePricing("professionalFeesExGstCents", value)}
             />

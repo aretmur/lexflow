@@ -15,7 +15,6 @@ import {
 } from "@/components/agreements/signature-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LegalReviewNotice } from "@/components/legal-review-notice";
 import { Notice } from "@/components/ui/notice";
 import { VICTORIAN_TEMPLATES } from "@/lib/agreements/constants";
 import {
@@ -23,6 +22,11 @@ import {
   calculateStagedPricing,
 } from "@/lib/agreements/pricing";
 import { formatAudFromCents } from "@/lib/money";
+import {
+  shortFormBasisLabel,
+  shortFormFeeLabel,
+  shortFormReviewShowsHourlyRate,
+} from "@/lib/agreements/short-form-pricing";
 import { formatDocumentDate } from "@/lib/documents/formatters";
 import type { AgreementDraft } from "@/lib/validations";
 import type { Practitioner } from "@/lib/types/database";
@@ -108,7 +112,6 @@ export function AgreementReview({
 
   return (
     <div className="space-y-10">
-      <LegalReviewNotice />
       <div className="flex flex-wrap items-center gap-3">
         <Badge
           tone={
@@ -280,11 +283,17 @@ export function AgreementReview({
         {draft.agreementType === "short_form" ? (
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-ink-muted">Hourly rate</dt>
-              <dd>{formatAudFromCents(draft.pricing.hourlyRateCents)}</dd>
+              <dt className="text-ink-muted">Costs basis</dt>
+              <dd>{shortFormBasisLabel(draft.matter.pricingType)}</dd>
             </div>
+            {shortFormReviewShowsHourlyRate(draft.matter.pricingType) ? (
+              <div>
+                <dt className="text-ink-muted">Hourly rate</dt>
+                <dd>{formatAudFromCents(draft.pricing.hourlyRateCents)}</dd>
+              </div>
+            ) : null}
             <div>
-              <dt className="text-ink-muted">Professional fees excl GST</dt>
+              <dt className="text-ink-muted">{shortFormFeeLabel(draft.matter.pricingType)}</dt>
               <dd>{formatAudFromCents(draft.pricing.professionalFeesExGstCents)}</dd>
             </div>
             <div>

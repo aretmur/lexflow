@@ -1,4 +1,5 @@
 import type { AgreementType } from "@/lib/agreements/constants";
+import type { PricingType } from "@/lib/types/enums";
 import type { Cents } from "@/lib/money";
 
 export type SnapshotParty = {
@@ -65,6 +66,7 @@ export type AgreementSnapshot = {
     jurisdiction: string;
   };
   agreementType: AgreementType;
+  pricingType: PricingType;
   scopeItems: string[];
   generalScopeStatement: string | null;
   exclusions: string | null;

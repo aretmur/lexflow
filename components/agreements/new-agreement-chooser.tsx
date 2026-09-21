@@ -26,7 +26,7 @@ export function NewAgreementChooser() {
           <input type="hidden" name="agreementType" value="short_form" />
           <h2 className="font-serif text-2xl">Short form</h2>
           <p className="text-sm leading-6 text-ink-muted">
-            Hourly rate, estimated professional fees, GST and an amount requested
+            Hourly or fixed professional fees, GST and an amount requested
             upfront.
           </p>
           <Button

@@ -1,5 +1,6 @@
 import type { AgreementDraft } from "@/lib/validations";
 import type { AgreementType } from "@/lib/agreements/constants";
+import { defaultShortFormPricingType } from "@/lib/agreements/short-form-pricing";
 
 export function newScopeItem(): AgreementDraft["scopeItems"][number] {
   return { id: crypto.randomUUID(), body: "" };
@@ -63,6 +64,7 @@ export function emptyDraft(
       description: "",
       instructionsDate: "",
       responsiblePractitionerId: "",
+      pricingType: defaultShortFormPricingType(),
     },
     scopeItems: [newScopeItem()],
     generalScopeStatement: "",

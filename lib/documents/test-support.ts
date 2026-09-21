@@ -85,6 +85,7 @@ export function shortFormSnapshot(
       jurisdiction: "VIC",
     },
     agreementType: "short_form",
+    pricingType: "hourly",
     scopeItems: ["Advise on the contract", "Prepare a letter of advice"],
     generalScopeStatement: "Provide commercial legal advice.",
     exclusions: "Litigation",
@@ -150,6 +151,7 @@ export function stagedSnapshot(
       jurisdiction: "VIC",
     },
     agreementType: "full_staged",
+    pricingType: "staged_fixed_fee",
     scopeItems: options.longScope
       ? Array.from({ length: 20 }, (_, index) => `Scope item ${index + 1}: ${"detailed instructions ".repeat(12)}`)
       : ["Act generally in the matter"],

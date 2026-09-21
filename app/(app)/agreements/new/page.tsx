@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { requireFirm } from "@/lib/auth/session";
 import { PageHeader } from "@/components/layout/page-header";
-import { LegalReviewNotice } from "@/components/legal-review-notice";
 import { NewAgreementChooser } from "@/components/agreements/new-agreement-chooser";
 
 export const metadata: Metadata = {
@@ -15,9 +14,8 @@ export default async function NewAgreementPage() {
     <div className="space-y-8">
       <PageHeader
         title="New agreement"
-        description="Choose the Victorian template. Both options remain under legal review."
+        description="Choose the Victorian template."
       />
-      <LegalReviewNotice />
       <NewAgreementChooser />
     </div>
   );

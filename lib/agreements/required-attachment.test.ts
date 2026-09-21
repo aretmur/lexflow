@@ -79,6 +79,7 @@ function snapshotWithAttachment(
       jurisdiction: "VIC",
     },
     agreementType: "short_form",
+    pricingType: "hourly",
     scopeItems: [],
     generalScopeStatement: null,
     exclusions: null,

@@ -7,6 +7,10 @@ import {
   calculateStagedPricing,
 } from "@/lib/agreements/pricing";
 import { freezeRequiredAttachment } from "@/lib/agreements/required-attachment";
+import {
+  shortFormPricingTypeFromMatter,
+  snapshotPricingType,
+} from "@/lib/agreements/short-form-pricing";
 import { freezeSnapshot, type AgreementSnapshot } from "@/lib/agreements/snapshot";
 import type { AgreementDraft } from "@/lib/validations";
 import type {
@@ -164,6 +168,10 @@ export function bundleToDraft(bundle: AgreementBundle): AgreementDraft {
     description: bundle.matter.matter_description ?? "",
     instructionsDate: bundle.matter.instructions_date ?? "",
     responsiblePractitionerId: bundle.matter.responsible_practitioner_id ?? "",
+    pricingType: shortFormPricingTypeFromMatter(
+      bundle.agreement.agreement_type,
+      bundle.matter.pricing_type,
+    ),
   };
   draft.generalScopeStatement = bundle.pricing?.general_scope_statement ?? "";
   draft.exclusions = bundle.pricing?.exclusions ?? "";
@@ -283,6 +291,7 @@ export function buildSnapshot(bundle: AgreementBundle, draft: AgreementDraft): A
       jurisdiction: "VIC",
     },
     agreementType: draft.agreementType,
+    pricingType: snapshotPricingType(draft.agreementType, draft.matter.pricingType),
     scopeItems: draft.scopeItems.map((item) => item.body.trim()).filter(Boolean),
     generalScopeStatement: draft.generalScopeStatement.trim() || null,
     exclusions: draft.exclusions.trim() || null,

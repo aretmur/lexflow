@@ -1,14 +1,11 @@
 import { VICTORIAN_TEMPLATES } from "@/lib/agreements/constants";
 import type { AgreementType } from "@/lib/agreements/constants";
 
-export const LEGAL_REVIEW_STATUS = "UNDER LEGAL REVIEW" as const;
-
 export type TemplateMetadata = {
   templateKey: string;
   templateVersion: string;
   jurisdiction: "VIC";
   agreementType: AgreementType;
-  legalReviewStatus: typeof LEGAL_REVIEW_STATUS;
 };
 
 function fromVictorian(type: AgreementType): TemplateMetadata {
@@ -18,7 +15,6 @@ function fromVictorian(type: AgreementType): TemplateMetadata {
     templateVersion: template.version,
     jurisdiction: "VIC",
     agreementType: type,
-    legalReviewStatus: LEGAL_REVIEW_STATUS,
   };
 }
 

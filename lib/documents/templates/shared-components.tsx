@@ -1,10 +1,7 @@
 import { Image, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { DocumentModel } from "@/lib/documents/document-types";
 import { displayOrDash, joinAddress } from "@/lib/documents/formatters";
-import {
-  LEGAL_BANNER,
-  PRIVATE_AND_CONFIDENTIAL,
-} from "@/lib/documents/templates/vic/wording";
+import { PRIVATE_AND_CONFIDENTIAL } from "@/lib/documents/templates/vic/wording";
 import { DROPBOX_SIGN_TEXT_TAGS } from "@/lib/signatures/text-tags";
 
 export const colors = {
@@ -206,10 +203,6 @@ export function DocumentHeader({ model }: { model: DocumentModel }) {
   );
 }
 
-export function LegalBanner() {
-  return <Text style={styles.banner}>{LEGAL_BANNER}</Text>;
-}
-
 export function PartyLines({
   name,
   address,
@@ -308,8 +301,7 @@ export function PageFooter({ model }: { model: DocumentModel }) {
   return (
     <View style={styles.footer} fixed>
       <Text>
-        {model.metadata.templateKey} · {model.metadata.templateVersion} ·{" "}
-        {model.metadata.legalReviewStatus}
+        {model.metadata.templateKey} · {model.metadata.templateVersion}
       </Text>
       <Text
         render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}

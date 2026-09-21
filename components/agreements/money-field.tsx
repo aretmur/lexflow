@@ -10,11 +10,13 @@ export function MoneyField({
   label,
   valueCents,
   onChange,
+  disabled,
 }: {
   id: string;
   label: string;
   valueCents: number;
   onChange: (cents: number) => void;
+  disabled?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState(centsToInputString(valueCents));
@@ -26,6 +28,10 @@ export function MoneyField({
       <Input
         id={id}
         inputMode="decimal"
+        disabled={disabled}
+        className={
+          disabled ? "cursor-not-allowed bg-paper text-ink-muted" : undefined
+        }
         value={focused ? text : centsToInputString(valueCents)}
         onFocus={() => {
           setText(centsToInputString(valueCents));

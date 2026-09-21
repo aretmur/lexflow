@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AGREEMENT_TYPES } from "@/lib/agreements/constants";
+import { PRICING_TYPES } from "@/lib/types/enums";
 import {
   calculateShortFormPricing,
   calculateStagedPricing,
@@ -86,6 +87,7 @@ const snapshotSchema = z.object({
     jurisdiction: z.string(),
   }),
   agreementType: z.enum(AGREEMENT_TYPES),
+  pricingType: z.enum(PRICING_TYPES).optional(),
   scopeItems: z.array(z.string()),
   generalScopeStatement: z.string().nullable(),
   exclusions: z.string().nullable(),
@@ -191,7 +193,12 @@ export function parseFrozenSnapshot(raw: unknown): AgreementSnapshot {
   if (!parsed.success) {
     throw new DocumentGenerationError("Frozen snapshot is missing or invalid.");
   }
-  return parsed.data;
+  return {
+    ...parsed.data,
+    pricingType:
+      parsed.data.pricingType ??
+      (parsed.data.agreementType === "short_form" ? "hourly" : "staged_fixed_fee"),
+  };
 }
 
 export function buildDocumentModel(

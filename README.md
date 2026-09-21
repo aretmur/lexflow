@@ -113,4 +113,4 @@ Displayed in the product:
 
 ## Legal templates
 
-Templates are deterministic and versioned. Wording in this foundation is marked **UNDER LEGAL REVIEW**. Lexflow does not treat stored templates as approved Victorian (or other Australian) legal content.
+Templates are deterministic and versioned.

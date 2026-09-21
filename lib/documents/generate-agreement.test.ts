@@ -211,11 +211,14 @@ describe("short form generation", () => {
     expect(pack.sha256).toMatch(/^[a-f0-9]{64}$/);
 
     const text = pdfText(pack.bytes);
-    expect(text.includes("UNDER LEGAL REVIEW")).toBe(true);
+    expect(text.includes("UNDER LEGAL REVIEW")).toBe(false);
     expect(text.includes("$200.00")).toBe(true);
     expect(text.includes("$280.00")).toBe(true);
     expect(text.includes("$3,130.00")).toBe(true);
     expect(text.includes("$50.00")).toBe(true);
+    expect(text.includes("Hourly rate")).toBe(true);
+    expect(text.includes("Estimated professional fees excluding GST")).toBe(true);
+    expect(text.includes("Fixed professional fee")).toBe(false);
     expect(text.includes("Signature: ______________________")).toBe(true);
     expect(text.includes("Name: __________________________")).toBe(true);
     expect(text.includes("Date: ___________________________")).toBe(true);
@@ -227,6 +230,17 @@ describe("short form generation", () => {
     const last = document.getPage(document.getPageCount() - 1);
     expect(last.getWidth()).toBe(400);
     expect(last.getHeight()).toBe(500);
+  });
+
+  it("fixed-fee PDF does not contain Hourly rate and contains Fixed professional fee", async () => {
+    const pack = await generateAgreementPackBytes({
+      snapshot: shortFormSnapshot({ pricingType: "fixed_fee" }, { hourlyRateCents: 0 }),
+      attachmentBytes: await blankPdf(1),
+    });
+    const text = pdfText(pack.bytes);
+    expect(text.includes("Hourly rate")).toBe(false);
+    expect(text.includes("Fixed professional fee")).toBe(true);
+    expect(text.includes("calculated by reference to the hourly rate")).toBe(false);
   });
 
   it("renders zero disbursements as $0.00", async () => {

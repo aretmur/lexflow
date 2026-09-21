@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AGREEMENT_TYPES } from "@/lib/agreements/constants";
+import { SHORT_FORM_PRICING_TYPES } from "@/lib/agreements/short-form-pricing";
 import { JURISDICTIONS } from "@/lib/types/enums";
 
 export const loginSchema = z.object({
@@ -107,6 +108,7 @@ export const agreementDraftSchema = z.object({
     description: z.string(),
     instructionsDate: z.string(),
     responsiblePractitionerId: z.string(),
+    pricingType: z.enum(SHORT_FORM_PRICING_TYPES),
   }),
   scopeItems: z.array(scopeItemDraftSchema),
   generalScopeStatement: z.string(),
@@ -166,6 +168,17 @@ export const agreementReadySchema = agreementDraftSchema.superRefine((draft, ctx
     if (filledStages.length < 1) {
       ctx.addIssue({ code: "custom", message: "Add at least one stage", path: ["stages"] });
     }
+  }
+  if (
+    draft.agreementType === "short_form" &&
+    draft.matter.pricingType === "fixed_fee" &&
+    draft.pricing.hourlyRateCents !== 0
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Hourly rate must be zero for a fixed-fee agreement.",
+      path: ["pricing", "hourlyRateCents"],
+    });
   }
 });
 

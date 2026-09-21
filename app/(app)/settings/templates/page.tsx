@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Table, Td, Th } from "@/components/ui/table";
-import { LegalReviewNotice } from "@/components/legal-review-notice";
 
 export const metadata: Metadata = {
   title: "Templates",
@@ -30,13 +29,12 @@ export default async function TemplatesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Templates"
-        description="Deterministic costs-agreement templates. Only approved templates will later be available for production generation."
+        description="Deterministic costs-agreement templates."
       />
-      <LegalReviewNotice />
       {!templates?.length ? (
         <EmptyState
           title="No templates"
-          description="When templates are added they will start as under legal review. Lexflow does not invent approved Victorian legal content."
+          description="Victorian costs-agreement templates will appear here when they are added for the firm."
         />
       ) : (
         <Table>
@@ -61,9 +59,7 @@ export default async function TemplatesPage() {
                       template.status === "approved" ? "accent" : "warning"
                     }
                   >
-                    {template.status === "under_legal_review"
-                      ? "UNDER LEGAL REVIEW"
-                      : template.status.replaceAll("_", " ")}
+                    {template.status.replaceAll("_", " ")}
                   </Badge>
                 </Td>
                 <Td>{template.effective_date ?? "—"}</Td>

@@ -4,7 +4,6 @@ import { displayOrDash, formatMoney } from "@/lib/documents/formatters";
 import {
   DocumentHeader,
   ExecutionBlock,
-  LegalBanner,
   Labeled,
   NumberedList,
   PageFooter,
@@ -134,11 +133,10 @@ export function VicFullStagedDocument({ model }: { model: DocumentModel }) {
     <Document
       title={`Costs agreement — ${snapshot.matter.referenceNumber}`}
       author={snapshot.firm.legalEntityName}
-      subject="Victorian full/staged costs agreement (UNDER LEGAL REVIEW)"
+      subject="Victorian full/staged costs agreement"
     >
       <Page size="A4" style={styles.page} wrap>
         <DocumentHeader model={model} />
-        <LegalBanner />
 
         <PartyLines
           name={snapshot.client.fullName}

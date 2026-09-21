@@ -122,6 +122,7 @@ describe("agreement snapshots", () => {
         jurisdiction: "VIC",
       },
       agreementType: "short_form",
+      pricingType: "hourly",
       scopeItems: ["Advise"],
       generalScopeStatement: null,
       exclusions: null,

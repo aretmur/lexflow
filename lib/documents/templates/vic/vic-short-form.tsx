@@ -4,7 +4,6 @@ import { displayOrDash, formatMoney } from "@/lib/documents/formatters";
 import {
   DocumentHeader,
   ExecutionBlock,
-  LegalBanner,
   Labeled,
   NumberedList,
   PageFooter,
@@ -21,7 +20,8 @@ import {
 import {
   DISCLOSURE_HEADING,
   DISCLOSURE_INTRO,
-  SHORT_FORM_BASIS_OF_COSTS,
+  SHORT_FORM_FIXED_FEE_BASIS_OF_COSTS,
+  SHORT_FORM_HOURLY_BASIS_OF_COSTS,
   SHORT_FORM_EXECUTION,
   SHORT_FORM_INTRO,
   SHORT_FORM_RIGHTS,
@@ -37,11 +37,10 @@ export function VicShortFormDocument({ model }: { model: DocumentModel }) {
     <Document
       title={`Costs agreement — ${snapshot.matter.referenceNumber}`}
       author={snapshot.firm.legalEntityName}
-      subject="Victorian short-form costs agreement (UNDER LEGAL REVIEW)"
+      subject="Victorian short-form costs agreement"
     >
       <Page size="A4" style={styles.page} wrap>
         <DocumentHeader model={model} />
-        <LegalBanner />
 
         <PartyLines
           name={snapshot.client.fullName}
@@ -92,12 +91,27 @@ export function VicShortFormDocument({ model }: { model: DocumentModel }) {
         ) : null}
 
         <Text style={styles.heading}>Costs</Text>
-        <Text style={styles.paragraph}>{SHORT_FORM_BASIS_OF_COSTS}</Text>
-        <TotalsRow label="Hourly rate" value={formatMoney(Number(snapshot.pricing.hourlyRateCents ?? 0))} />
-        <TotalsRow
-          label="Estimated professional fees excluding GST"
-          value={formatMoney(Number(snapshot.pricing.professionalFeesExGstCents ?? 0))}
-        />
+        {snapshot.pricingType === "fixed_fee" ? (
+          <>
+            <Text style={styles.paragraph}>{SHORT_FORM_FIXED_FEE_BASIS_OF_COSTS}</Text>
+            <TotalsRow
+              label="Fixed professional fee excluding GST"
+              value={formatMoney(Number(snapshot.pricing.professionalFeesExGstCents ?? 0))}
+            />
+          </>
+        ) : (
+          <>
+            <Text style={styles.paragraph}>{SHORT_FORM_HOURLY_BASIS_OF_COSTS}</Text>
+            <TotalsRow
+              label="Hourly rate"
+              value={formatMoney(Number(snapshot.pricing.hourlyRateCents ?? 0))}
+            />
+            <TotalsRow
+              label="Estimated professional fees excluding GST"
+              value={formatMoney(Number(snapshot.pricing.professionalFeesExGstCents ?? 0))}
+            />
+          </>
+        )}
         <TotalsRow
           label="Discount"
           value={formatMoney(Number(snapshot.pricing.discountCents ?? 0))}
