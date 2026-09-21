@@ -68,5 +68,6 @@ export async function uploadRequiredAttachmentAction(
   }
 
   revalidatePath("/settings/attachment");
-  return { message: `Version ${version} uploaded. Previous versions stay on file if already used.` };
+  revalidatePath("/agreements");
+  return { message: `Version ${version} is now active. Previous versions stay on file for already frozen agreements.` };
 }

@@ -28,21 +28,33 @@ export default async function AttachmentSettingsPage() {
     throw new Error(error.message);
   }
 
+  const active = attachments?.find((attachment) => attachment.is_active);
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Required attachment"
-        description="Upload the Legal Services Council costs-agreement information sheet. It will later be combined with the generated agreement. PDF merge is not implemented yet."
+        description="Upload the required costs information sheet. The active version is automatically appended to every new agreement when the agreement is marked ready."
       />
       <Notice>
-        Current Victorian attachment: {REQUIRED_ATTACHMENT_TITLE}. A version used in a
-        ready agreement cannot be altered.
+        Current Victorian attachment: {REQUIRED_ATTACHMENT_TITLE}. Uploading a new
+        file makes that version active and previous versions inactive. Frozen and
+        generated agreements keep the version they were created with.
       </Notice>
+      {active ? (
+        <div className="border border-rule bg-paper-raised px-4 py-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">
+            Active version
+          </p>
+          <p className="mt-1 font-serif text-2xl">Version {active.version}</p>
+          <p className="mt-1 text-sm text-ink-muted">{active.original_filename}</p>
+        </div>
+      ) : null}
       <AttachmentUploadForm />
       {!attachments?.length ? (
         <EmptyState
           title="No attachment uploaded"
-          description="Upload the July 2022 information sheet PDF to attach it to future agreements."
+          description="Upload the July 2022 information sheet PDF. It will be appended automatically when an agreement is marked ready."
         />
       ) : (
         <Table>

@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LegalReviewNotice } from "@/components/legal-review-notice";
+import { Notice } from "@/components/ui/notice";
 import { VICTORIAN_TEMPLATES } from "@/lib/agreements/constants";
 import {
   calculateShortFormPricing,
@@ -42,6 +43,8 @@ export function AgreementReview({
   testMode,
   signatureRequest,
   signedDocument,
+  hasActiveAttachment,
+  frozenAttachmentMissing,
 }: {
   draft: AgreementDraft;
   status: string;
@@ -50,6 +53,8 @@ export function AgreementReview({
   testMode: boolean;
   signatureRequest: SignaturePanelRequest | null;
   signedDocument: SignaturePanelDocument | null;
+  hasActiveAttachment: boolean;
+  frozenAttachmentMissing: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -124,13 +129,42 @@ export function AgreementReview({
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
+      {draftStatus && !hasActiveAttachment ? (
+        <Notice tone="warning">
+          <p className="font-medium">Required attachment missing</p>
+          <p>
+            The Victorian costs information sheet must be uploaded before this
+            agreement can be generated.
+          </p>
+          <a
+            href="/settings/attachment"
+            className="inline-flex h-10 items-center bg-accent px-4 text-sm font-medium text-paper-raised hover:bg-accent-hover"
+          >
+            Upload required attachment
+          </a>
+        </Notice>
+      ) : null}
+
+      {ready && frozenAttachmentMissing ? (
+        <Notice tone="warning">
+          <p className="font-medium">Required attachment missing from this version.</p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => reopenAgreementDraftAction(draft.agreementId)}
+          >
+            Edit and create new version
+          </Button>
+        </Notice>
+      ) : null}
+
       {generated ? (
         <section className="space-y-4">
           <h2 className="font-serif text-xl">Generated pack</h2>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-ink-muted">Version</dt>
-              <dd>Version {pack!.versionNumber}</dd>
+              <dt className="text-ink-muted">Agreement version</dt>
+              <dd>{pack!.versionNumber}</dd>
             </div>
             <div>
               <dt className="text-ink-muted">Generated</dt>
@@ -141,8 +175,10 @@ export function AgreementReview({
               <dd>{pack!.templateVersion}</dd>
             </div>
             <div>
-              <dt className="text-ink-muted">Attachment version</dt>
-              <dd>{pack!.attachmentVersion ? `Version ${pack!.attachmentVersion}` : "—"}</dd>
+              <dt className="text-ink-muted">Required attachment</dt>
+              <dd>
+                {pack!.attachmentVersion ? `Version ${pack!.attachmentVersion}` : "—"}
+              </dd>
             </div>
             <div>
               <dt className="text-ink-muted">Pages</dt>
@@ -341,12 +377,16 @@ export function AgreementReview({
             <Button type="button" variant="secondary" onClick={saveDraft} disabled={pending}>
               Save draft
             </Button>
-            <Button type="button" onClick={markReady} disabled={pending}>
+            <Button
+              type="button"
+              onClick={markReady}
+              disabled={pending || !hasActiveAttachment}
+            >
               Mark ready
             </Button>
           </>
         ) : null}
-        {ready ? (
+        {ready && !frozenAttachmentMissing ? (
           <>
             <Button
               type="button"

@@ -8,15 +8,15 @@ export function Notice({
   tone?: "neutral" | "warning";
 }) {
   return (
-    <p
+    <div
       className={cn(
-        "border px-4 py-3 text-sm leading-6",
+        "space-y-2 border px-4 py-3 text-sm leading-6",
         tone === "warning"
           ? "border-warning/30 bg-warning-wash text-warning"
           : "border-rule bg-paper-raised text-ink-muted",
       )}
     >
       {children}
-    </p>
+    </div>
   );
 }

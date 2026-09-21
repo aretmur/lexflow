@@ -163,6 +163,24 @@ describe("document versioning and immutability", () => {
 });
 
 describe("attachment merge", () => {
+  it("generated pack appends attachment", async () => {
+    const agreement = await blankPdf(3);
+    const attachment = await blankPdf(2, [400, 500]);
+    const merged = await mergeAgreementAndAttachment(agreement, attachment);
+    expect(merged.agreementPageCount).toBe(3);
+    expect(merged.attachmentPageCount).toBe(2);
+    expect(merged.pageCount).toBe(merged.agreementPageCount + merged.attachmentPageCount);
+  });
+
+  it("generated page count equals agreement pages plus attachment pages", async () => {
+    const pack = await generateAgreementPackBytes({
+      snapshot: shortFormSnapshot(),
+      attachmentBytes: await blankPdf(2),
+    });
+    expect(pack.pageCount).toBe(pack.agreementPageCount + pack.attachmentPageCount);
+    expect(pack.attachmentPageCount).toBe(2);
+  });
+
   it("appends attachment pages after the generated agreement without changing page sizes", async () => {
     const agreement = await blankPdf(3);
     const attachment = await blankPdf(2, [400, 500]);

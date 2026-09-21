@@ -9,8 +9,16 @@ import { VICTORIAN_TEMPLATES, type AgreementType } from "@/lib/agreements/consta
 import {
   bundleToDraft,
   buildSnapshot,
+  loadActiveRequiredAttachment,
   loadAgreementBundle,
 } from "@/lib/agreements/bundle";
+import {
+  MISSING_ATTACHMENT_READY_ERROR,
+  MissingRequiredAttachmentError,
+  nextAgreementVersionNumber,
+  reopenReadyAgreementStatus,
+  requireActiveAttachment,
+} from "@/lib/agreements/required-attachment";
 import {
   calculateShortFormPricing,
   calculateStagedPricing,
@@ -102,28 +110,33 @@ export async function markAgreementReadyAction(payload: unknown) {
     return { error: firstIssue(parsed.error) };
   }
 
+  const { firm, user } = await requireFirm();
+  let activeAttachment;
+  try {
+    activeAttachment = requireActiveAttachment(
+      await loadActiveRequiredAttachment(firm.id),
+    );
+  } catch (error) {
+    if (error instanceof MissingRequiredAttachmentError) {
+      return { error: MISSING_ATTACHMENT_READY_ERROR };
+    }
+    throw error;
+  }
+
   const persistError = await persistDraft(parsed.data);
   if (persistError) {
     return { error: persistError };
   }
 
-  const { firm, user } = await requireFirm();
   const bundle = await loadAgreementBundle(firm.id, parsed.data.agreementId);
   if (!bundle) {
     return { error: "Agreement not found." };
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { data: activeAttachment } = await supabase
-    .from("required_attachments")
-    .select("*")
-    .eq("firm_id", firm.id)
-    .eq("is_active", true)
-    .maybeSingle();
-
   bundle.attachment = activeAttachment;
   const snapshot = buildSnapshot(bundle, parsed.data);
 
+  const supabase = await createServerSupabaseClient();
   const { data: lastVersion } = await supabase
     .from("agreement_versions")
     .select("version_number")
@@ -145,7 +158,7 @@ export async function markAgreementReadyAction(payload: unknown) {
   const { error: versionError } = await supabase.from("agreement_versions").insert({
     firm_id: firm.id,
     costs_agreement_id: parsed.data.agreementId,
-    version_number: (lastVersion?.version_number ?? 0) + 1,
+    version_number: nextAgreementVersionNumber(lastVersion?.version_number),
     status: "issued",
     snapshot: snapshot as unknown as Record<string, unknown>,
     executed_at: null,
@@ -160,7 +173,7 @@ export async function markAgreementReadyAction(payload: unknown) {
     .update({
       status: "ready",
       snapshot_frozen_at: new Date().toISOString(),
-      required_attachment_id: activeAttachment?.id ?? null,
+      required_attachment_id: activeAttachment.id,
     })
     .eq("id", parsed.data.agreementId)
     .eq("firm_id", firm.id);
@@ -206,10 +219,11 @@ export async function reopenAgreementDraftAction(agreementId: string) {
   }
   assertSameFirm(firm.id, agreement.firm_id);
 
-  if (agreement.status === "ready") {
+  const draftStatus = reopenReadyAgreementStatus(agreement.status);
+  if (draftStatus) {
     await supabase
       .from("costs_agreements")
-      .update({ status: "draft" })
+      .update({ status: draftStatus })
       .eq("id", agreementId)
       .eq("firm_id", firm.id);
   }

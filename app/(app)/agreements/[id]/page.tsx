@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireFirm } from "@/lib/auth/session";
 import { isUuid } from "@/lib/constants";
-import { bundleToDraft, loadAgreementBundle } from "@/lib/agreements/bundle";
+import {
+  bundleToDraft,
+  loadActiveRequiredAttachment,
+  loadAgreementBundle,
+} from "@/lib/agreements/bundle";
+import { snapshotHasRequiredAttachment } from "@/lib/agreements/required-attachment";
 import {
   loadLatestGeneratedPack,
   loadLatestIssuedVersion,
@@ -42,6 +47,7 @@ export default async function AgreementReviewPage({
   const snapshot = version?.snapshot as AgreementSnapshot | undefined;
   const signatureRequest = await loadLatestSignatureRequest(firm.id, id);
   const signedDocument = await loadSignedAgreementDocument(firm.id, id);
+  const activeAttachment = await loadActiveRequiredAttachment(firm.id);
 
   return (
     <div className="space-y-8">
@@ -86,6 +92,10 @@ export default async function AgreementReviewPage({
                 sha256: signedDocument.sha256,
               }
             : null
+        }
+        hasActiveAttachment={Boolean(activeAttachment)}
+        frozenAttachmentMissing={
+          bundle.agreement.status === "ready" && !snapshotHasRequiredAttachment(snapshot)
         }
       />
     </div>

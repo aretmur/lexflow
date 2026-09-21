@@ -6,6 +6,7 @@ import {
   calculateShortFormPricing,
   calculateStagedPricing,
 } from "@/lib/agreements/pricing";
+import { freezeRequiredAttachment } from "@/lib/agreements/required-attachment";
 import { freezeSnapshot, type AgreementSnapshot } from "@/lib/agreements/snapshot";
 import type { AgreementDraft } from "@/lib/validations";
 import type {
@@ -131,6 +132,19 @@ export async function loadAgreementBundle(
   };
 }
 
+export async function loadActiveRequiredAttachment(
+  firmId: string,
+): Promise<RequiredAttachment | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("required_attachments")
+    .select("*")
+    .eq("firm_id", firmId)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data ?? null;
+}
+
 export function bundleToDraft(bundle: AgreementBundle): AgreementDraft {
   const draft = emptyDraft(bundle.agreement.id, bundle.agreement.agreement_type);
   draft.client = {
@@ -220,14 +234,7 @@ export function buildSnapshot(bundle: AgreementBundle, draft: AgreementDraft): A
       jurisdiction: template.jurisdiction,
       legalReview: true,
     },
-    attachment: bundle.attachment
-      ? {
-          id: bundle.attachment.id,
-          version: bundle.attachment.version,
-          title: bundle.attachment.title,
-          storagePath: bundle.attachment.storage_path,
-        }
-      : null,
+    attachment: bundle.attachment ? freezeRequiredAttachment(bundle.attachment) : null,
     firm: {
       legalEntityName: bundle.firm.name,
       tradingName: bundle.firm.practice_name,
