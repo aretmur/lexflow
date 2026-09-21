@@ -82,6 +82,21 @@ export type FundingRequestStatus = (typeof FUNDING_REQUEST_STATUSES)[number];
 export const DESTINATION_TYPES = ["trust", "office", "other"] as const;
 export type DestinationType = (typeof DESTINATION_TYPES)[number];
 
+export const SIGNATURE_PROVIDERS = ["dropbox_sign"] as const;
+export type SignatureProviderName = (typeof SIGNATURE_PROVIDERS)[number];
+
+export const SIGNATURE_REQUEST_STATUSES = [
+  "pending",
+  "sent",
+  "viewed",
+  "signed",
+  "declined",
+  "cancelled",
+  "expired",
+  "failed",
+] as const;
+export type SignatureRequestStatus = (typeof SIGNATURE_REQUEST_STATUSES)[number];
+
 export const TEMPLATE_STATUSES = [
   "draft",
   "under_legal_review",

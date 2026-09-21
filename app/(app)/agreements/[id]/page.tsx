@@ -7,6 +7,11 @@ import {
   loadLatestGeneratedPack,
   loadLatestIssuedVersion,
 } from "@/lib/agreements/packs";
+import {
+  loadLatestSignatureRequest,
+  loadSignedAgreementDocument,
+} from "@/lib/signatures/load";
+import { isDropboxSignTestMode } from "@/lib/signatures/config";
 import { PageHeader } from "@/components/layout/page-header";
 import { AgreementReview } from "@/components/agreements/agreement-review";
 import type { AgreementSnapshot } from "@/lib/agreements/snapshot";
@@ -35,18 +40,14 @@ export default async function AgreementReviewPage({
   const pack = await loadLatestGeneratedPack(firm.id, id);
   const version = await loadLatestIssuedVersion(firm.id, id);
   const snapshot = version?.snapshot as AgreementSnapshot | undefined;
+  const signatureRequest = await loadLatestSignatureRequest(firm.id, id);
+  const signedDocument = await loadSignedAgreementDocument(firm.id, id);
 
   return (
     <div className="space-y-8">
       <PageHeader
         title={draft.matter.title || "Untitled matter"}
-        description={
-          bundle.agreement.status === "generated"
-            ? "Generated pack is frozen. Sending for signature is not yet available."
-            : bundle.agreement.status === "ready"
-              ? "Snapshot is frozen. Generate the agreement pack, or edit to create a new version."
-              : "Review the agreement. Sending for signature is not yet available."
-        }
+        description={headerDescription(bundle.agreement.status)}
       />
       <AgreementReview
         draft={draft}
@@ -63,7 +64,46 @@ export default async function AgreementReviewPage({
               }
             : null
         }
+        testMode={isDropboxSignTestMode()}
+        signatureRequest={
+          signatureRequest
+            ? {
+                signerName: signatureRequest.signerName,
+                signerEmail: signatureRequest.signerEmail,
+                status: signatureRequest.status,
+                sentAt: signatureRequest.sentAt,
+                viewedAt: signatureRequest.viewedAt,
+                signedAt: signatureRequest.signedAt,
+                lastError: signatureRequest.lastError,
+                testMode: signatureRequest.testMode,
+              }
+            : null
+        }
+        signedDocument={
+          signedDocument
+            ? {
+                signedAt: signedDocument.signedAt,
+                sha256: signedDocument.sha256,
+              }
+            : null
+        }
       />
     </div>
   );
+}
+
+function headerDescription(status: string) {
+  if (status === "generated") {
+    return "Generated pack is frozen. Confirm the client details and send for signature.";
+  }
+  if (status === "sent" || status === "viewed") {
+    return "Awaiting the client to sign from the secure signing link.";
+  }
+  if (status === "signed") {
+    return "This costs agreement has been signed. The original generated pack remains available.";
+  }
+  if (status === "ready") {
+    return "Snapshot is frozen. Generate the agreement pack, or edit to create a new version.";
+  }
+  return "Review the agreement before generating and sending for signature.";
 }

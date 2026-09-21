@@ -5,6 +5,7 @@ import {
   LEGAL_BANNER,
   PRIVATE_AND_CONFIDENTIAL,
 } from "@/lib/documents/templates/vic/wording";
+import { DROPBOX_SIGN_TEXT_TAGS } from "@/lib/signatures/text-tags";
 
 export const colors = {
   ink: "#1c1917",
@@ -133,6 +134,15 @@ export const styles = StyleSheet.create({
     marginTop: 8,
     fontFamily: "Helvetica",
     fontSize: 10,
+  },
+  signatureField: {
+    marginTop: 8,
+  },
+  hiddenTag: {
+    color: "#FFFFFF",
+    fontFamily: "Helvetica",
+    fontSize: 6,
+    lineHeight: 1,
   },
   footer: {
     position: "absolute",
@@ -277,10 +287,19 @@ export function ExecutionBlock({ wording }: { wording: string }) {
     <View>
       <Text style={styles.heading}>Execution</Text>
       <Text style={styles.paragraph}>{wording}</Text>
-      <Text style={styles.signatureLine}>Signature: ______________________</Text>
-      <Text style={styles.signatureLine}>Name: __________________________</Text>
+      <View style={styles.signatureField} wrap={false}>
+        <Text style={styles.signatureLine}>Signature: ______________________</Text>
+        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.signature}</Text>
+      </View>
+      <View style={styles.signatureField} wrap={false}>
+        <Text style={styles.signatureLine}>Name: __________________________</Text>
+        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.name}</Text>
+      </View>
       <Text style={styles.signatureLine}>Capacity: _______________________</Text>
-      <Text style={styles.signatureLine}>Date: ___________________________</Text>
+      <View style={styles.signatureField} wrap={false}>
+        <Text style={styles.signatureLine}>Date: ___________________________</Text>
+        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.date}</Text>
+      </View>
     </View>
   );
 }

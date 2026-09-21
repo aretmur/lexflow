@@ -33,7 +33,7 @@ In the [Supabase dashboard](https://supabase.com/dashboard):
 
 1. Create a project.
 2. Copy the project URL and publishable key (legacy name: anon key) from **Settings → API**.
-3. Disable public service-role use in the app. The service role key must not be added to this Next.js project.
+3. Keep the service role key server-only. It is required for Dropbox Sign webhook processing and must never be prefixed with `NEXT_PUBLIC_`.
 
 ### 3. Environment variables
 
@@ -48,6 +48,11 @@ Set:
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key (RLS-enforced). `NEXT_PUBLIC_SUPABASE_ANON_KEY` still works |
 | `NEXT_PUBLIC_SITE_URL` | App origin for auth redirects (`http://localhost:3000` locally) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Webhook writes and signed-PDF ingest. Never `NEXT_PUBLIC_` |
+| `DROPBOX_SIGN_API_KEY` | Server-only Dropbox Sign API key |
+| `DROPBOX_SIGN_CLIENT_ID` | Server-only Dropbox Sign app client id |
+| `DROPBOX_SIGN_TEST_MODE` | Set `true` only for test signature requests. Production must not set this |
+| `SIGNING_REDIRECT_URL` | Optional. Defaults to `https://www.lexflow.com.au/signing-complete` |
 
 ### 4. Run the database migrations
 
@@ -57,8 +62,9 @@ Run these SQL files in order against the Supabase project (SQL editor or `supaba
 2. `supabase/migrations/20260918140000_agreement_workflow.sql`
 3. `supabase/migrations/20260918150000_generated_agreement_packs.sql`
 4. `supabase/migrations/20260921100000_create_agreement_draft.sql`
+5. `supabase/migrations/20260921120000_signature_requests.sql`
 
-The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store. The third adds immutable generated agreement packs and the private `generated-agreements` storage bucket. The fourth adds `create_agreement_draft`, which creates a placeholder client, matter, agreement and pricing row in one transaction.
+The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store. The third adds immutable generated agreement packs and the private `generated-agreements` storage bucket. The fourth adds `create_agreement_draft`, which creates a placeholder client, matter, agreement and pricing row in one transaction. The fifth adds signature requests, webhook event idempotency, immutable signed documents, and the private `signed-agreements` storage bucket.
 
 ### 5. Auth settings
 
@@ -88,10 +94,12 @@ npm run build
 ## Deploy on Vercel
 
 1. Import the GitHub repository into Vercel.
-2. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
-3. `NEXT_PUBLIC_SITE_URL` must be the production origin, for example `https://lexflow.vercel.app`.
-4. Add the production `/auth/callback` URL in Supabase Auth redirect URLs.
-5. Deploy.
+2. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DROPBOX_SIGN_API_KEY`, and `DROPBOX_SIGN_CLIENT_ID` in the Vercel project environment.
+3. `NEXT_PUBLIC_SITE_URL` must be the production origin, for example `https://www.lexflow.com.au`.
+4. Leave `DROPBOX_SIGN_TEST_MODE` unset in production.
+5. Add the production `/auth/callback` URL in Supabase Auth redirect URLs.
+6. In Dropbox Sign, point the app callback URL to `https://www.lexflow.com.au/api/webhooks/dropbox-sign`.
+7. Deploy.
 
 The Next.js app uses the App Router and `proxy.ts` for session refresh. No extra Vercel configuration is required.
 

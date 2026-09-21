@@ -15,7 +15,7 @@ export async function loadLatestIssuedVersion(
     .select("*")
     .eq("firm_id", firmId)
     .eq("costs_agreement_id", agreementId)
-    .eq("status", "issued")
+    .in("status", ["issued", "signed"])
     .order("version_number", { ascending: false })
     .limit(1)
     .maybeSingle();

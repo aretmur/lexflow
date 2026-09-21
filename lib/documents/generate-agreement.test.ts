@@ -5,7 +5,11 @@ import { DocumentGenerationError } from "@/lib/documents/errors";
 import { buildDocumentModel } from "@/lib/documents/from-snapshot";
 import { generateAgreementPackBytes } from "@/lib/documents/generate-agreement";
 import { mergeAgreementAndAttachment } from "@/lib/documents/pdf/merge-pdfs";
-import { generatedPackStoragePath } from "@/lib/documents/pdf/storage-path";
+import {
+  generatedPackStoragePath,
+  signedAgreementStoragePath,
+} from "@/lib/documents/pdf/storage-path";
+import { DROPBOX_SIGN_TEXT_TAGS } from "@/lib/signatures/text-tags";
 import { shortFormSnapshot, stagedSnapshot } from "@/lib/documents/test-support";
 
 async function blankPdf(pageCount: number, size: [number, number] = [595.28, 841.89]) {
@@ -133,6 +137,29 @@ describe("document versioning and immutability", () => {
     });
     expect(first).toBe(second);
   });
+
+  it("stores signed agreements on a separate immutable path", () => {
+    expect(
+      signedAgreementStoragePath({
+        firmId: "firm-1",
+        agreementId: "agreement-1",
+        versionNumber: 1,
+      }),
+    ).toBe("firm-1/agreement-1/version-1/signed-agreement.pdf");
+    expect(
+      signedAgreementStoragePath({
+        firmId: "firm-1",
+        agreementId: "agreement-1",
+        versionNumber: 1,
+      }),
+    ).not.toBe(
+      generatedPackStoragePath({
+        firmId: "firm-1",
+        agreementId: "agreement-1",
+        versionNumber: 1,
+      }),
+    );
+  });
 });
 
 describe("attachment merge", () => {
@@ -172,6 +199,11 @@ describe("short form generation", () => {
     expect(text.includes("$3,130.00")).toBe(true);
     expect(text.includes("$50.00")).toBe(true);
     expect(text.includes("Signature: ______________________")).toBe(true);
+    expect(text.includes("Name: __________________________")).toBe(true);
+    expect(text.includes("Date: ___________________________")).toBe(true);
+    expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.signature)).toBe(true);
+    expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.name)).toBe(true);
+    expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.date)).toBe(true);
 
     const document = await PDFDocument.load(pack.bytes);
     const last = document.getPage(document.getPageCount() - 1);

@@ -3,13 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublishableKey } from "@/lib/constants";
 import type { Database } from "@/lib/types/database";
 
-const PUBLIC_PATHS = new Set(["/login"]);
+const PUBLIC_PATHS = new Set(["/login", "/signing-complete"]);
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.has(pathname)) {
     return true;
   }
-  return pathname.startsWith("/auth/");
+  return pathname.startsWith("/auth/") || pathname.startsWith("/api/webhooks/");
 }
 
 export async function updateSession(request: NextRequest) {

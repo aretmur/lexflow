@@ -10,6 +10,8 @@ import type {
   MatterStatus,
   MembershipRole,
   PricingType,
+  SignatureProviderName,
+  SignatureRequestStatus,
   TemplateStatus,
 } from "@/lib/types/enums";
 
@@ -264,6 +266,57 @@ export type GeneratedAgreementPack = {
   byte_size: number;
 };
 
+export type SignatureRequest = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  agreement_version_id: string;
+  generated_pack_id: string;
+  provider: SignatureProviderName;
+  provider_request_id: string | null;
+  signer_name: string;
+  signer_email: string;
+  status: SignatureRequestStatus;
+  test_mode: boolean;
+  last_error: string | null;
+  last_webhook_event_id: string | null;
+  sent_at: string | null;
+  viewed_at: string | null;
+  signed_at: string | null;
+  declined_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  expired_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SignatureWebhookEvent = {
+  id: string;
+  firm_id: string;
+  signature_request_id: string;
+  provider: string;
+  provider_event_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  processed_at: string;
+};
+
+export type SignedAgreementDocument = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  agreement_version_id: string;
+  signature_request_id: string;
+  storage_path: string;
+  sha256: string;
+  page_count: number;
+  byte_size: number;
+  signed_at: string;
+  created_at: string;
+};
+
 export type AuditEvent = {
   id: string;
   firm_id: string;
@@ -379,6 +432,58 @@ export type Database = {
           generated_at?: string;
         },
         Partial<GeneratedAgreementPack>
+      >;
+      signature_requests: Table<
+        SignatureRequest,
+        Omit<
+          SignatureRequest,
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "provider_request_id"
+          | "test_mode"
+          | "last_error"
+          | "last_webhook_event_id"
+          | "sent_at"
+          | "viewed_at"
+          | "signed_at"
+          | "declined_at"
+          | "completed_at"
+          | "cancelled_at"
+          | "expired_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          provider_request_id?: string | null;
+          test_mode?: boolean;
+          last_error?: string | null;
+          last_webhook_event_id?: string | null;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          signed_at?: string | null;
+          declined_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+          expired_at?: string | null;
+        },
+        Partial<SignatureRequest>
+      >;
+      signature_webhook_events: Table<
+        SignatureWebhookEvent,
+        Omit<SignatureWebhookEvent, "id" | "processed_at"> & {
+          id?: string;
+          processed_at?: string;
+        },
+        Partial<SignatureWebhookEvent>
+      >;
+      signed_agreement_documents: Table<
+        SignedAgreementDocument,
+        Omit<SignedAgreementDocument, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        },
+        Partial<SignedAgreementDocument>
       >;
       audit_events: Table<
         AuditEvent,

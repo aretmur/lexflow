@@ -172,6 +172,7 @@ export const agreementReadySchema = agreementDraftSchema.superRefine((draft, ctx
 export type AgreementDraft = z.infer<typeof agreementDraftSchema>;
 
 export type FormActionState = {
+  ok?: boolean;
   error?: string;
   message?: string;
   fieldErrors?: Record<string, string[] | undefined>;

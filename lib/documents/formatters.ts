@@ -13,6 +13,21 @@ export function formatDocumentDate(iso: string): string {
   }).format(date);
 }
 
+export function formatDocumentDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Australia/Melbourne",
+  }).format(date);
+}
+
 export function formatMoney(cents: Cents): string {
   return formatAudFromCents(cents);
 }

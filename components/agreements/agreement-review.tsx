@@ -8,6 +8,11 @@ import {
   saveAgreementDraftAction,
 } from "@/app/actions/agreements";
 import { generateAgreementAction } from "@/app/actions/generate-agreement";
+import {
+  SignaturePanel,
+  type SignaturePanelDocument,
+  type SignaturePanelRequest,
+} from "@/components/agreements/signature-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LegalReviewNotice } from "@/components/legal-review-notice";
@@ -34,11 +39,17 @@ export function AgreementReview({
   status,
   practitioner,
   pack,
+  testMode,
+  signatureRequest,
+  signedDocument,
 }: {
   draft: AgreementDraft;
   status: string;
   practitioner: Pick<Practitioner, "full_name" | "title"> | null;
   pack: PackSummary | null;
+  testMode: boolean;
+  signatureRequest: SignaturePanelRequest | null;
+  signedDocument: SignaturePanelDocument | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +62,10 @@ export function AgreementReview({
     miscellaneousFeesCents: draft.pricing.miscellaneousFeesCents,
     amountRequestedUpfrontCents: draft.pricing.amountRequestedUpfrontCents,
   });
-  const generated = status === "generated" && pack;
+  const generated = Boolean(pack) && ["generated", "sent", "viewed", "signed"].includes(status);
   const ready = status === "ready";
   const draftStatus = status === "draft";
+  const canSend = status === "generated" && pack;
 
   async function saveDraft() {
     setPending(true);
@@ -93,7 +105,17 @@ export function AgreementReview({
     <div className="space-y-10">
       <LegalReviewNotice />
       <div className="flex flex-wrap items-center gap-3">
-        <Badge tone={generated ? "accent" : ready ? "warning" : "neutral"}>
+        <Badge
+          tone={
+            status === "signed"
+              ? "accent"
+              : ["sent", "viewed", "ready"].includes(status)
+                ? "warning"
+                : status === "declined" || status === "failed"
+                  ? "danger"
+                  : "neutral"
+          }
+        >
           {status.replaceAll("_", " ")}
         </Badge>
         <span className="text-sm text-ink-muted">
@@ -108,23 +130,23 @@ export function AgreementReview({
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-ink-muted">Version</dt>
-              <dd>Version {pack.versionNumber}</dd>
+              <dd>Version {pack!.versionNumber}</dd>
             </div>
             <div>
               <dt className="text-ink-muted">Generated</dt>
-              <dd>{formatDocumentDate(pack.generatedAt)}</dd>
+              <dd>{formatDocumentDate(pack!.generatedAt)}</dd>
             </div>
             <div>
               <dt className="text-ink-muted">Template version</dt>
-              <dd>{pack.templateVersion}</dd>
+              <dd>{pack!.templateVersion}</dd>
             </div>
             <div>
               <dt className="text-ink-muted">Attachment version</dt>
-              <dd>{pack.attachmentVersion ? `Version ${pack.attachmentVersion}` : "—"}</dd>
+              <dd>{pack!.attachmentVersion ? `Version ${pack!.attachmentVersion}` : "—"}</dd>
             </div>
             <div>
               <dt className="text-ink-muted">Pages</dt>
-              <dd>{pack.pageCount}</dd>
+              <dd>{pack!.pageCount}</dd>
             </div>
           </dl>
           <div className="flex flex-wrap gap-3">
@@ -149,6 +171,18 @@ export function AgreementReview({
             className="h-[80vh] w-full border border-rule bg-paper-raised"
           />
         </section>
+      ) : null}
+
+      {canSend || ["sent", "viewed", "signed"].includes(status) ? (
+        <SignaturePanel
+          agreementId={draft.agreementId}
+          agreementStatus={status}
+          defaultSignerName={draft.client.fullName}
+          defaultSignerEmail={draft.client.email}
+          testMode={testMode}
+          request={signatureRequest}
+          signedDocument={signedDocument}
+        />
       ) : null}
 
       <section className="space-y-2">
