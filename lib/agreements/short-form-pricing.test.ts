@@ -208,6 +208,7 @@ function fixedFeeBundle(): AgreementBundle {
       account_number: null,
       payment_reference_prefix: null,
       cyber_fraud_contact_phone: null,
+      require_page_initials: true,
       created_at: now,
       updated_at: now,
     },

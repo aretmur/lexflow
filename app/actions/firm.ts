@@ -10,6 +10,7 @@ import {
   firstIssue,
   updateFirmSchema,
   updatePaymentSchema,
+  updateSigningSchema,
   type FormActionState,
 } from "@/lib/validations";
 import { parseOptionalAudToCents } from "@/lib/money";
@@ -168,6 +169,48 @@ export async function updatePaymentAction(
 
   revalidatePath("/settings/payment");
   return { message: "Payment details saved." };
+}
+
+export async function updateSigningAction(
+  _previous: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const context = await requireFirm();
+  if (!["owner", "admin"].includes(context.membership.role)) {
+    return { error: "Only a firm owner or administrator can update signing settings." };
+  }
+
+  const parsed = updateSigningSchema.safeParse({
+    requirePageInitials: formData.get("requirePageInitials"),
+  });
+
+  if (!parsed.success) {
+    return { error: firstIssue(parsed.error) };
+  }
+
+  const requirePageInitials = parsed.data.requirePageInitials === "true";
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("firms")
+    .update({ require_page_initials: requirePageInitials })
+    .eq("id", context.firm.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  await supabase.from("audit_events").insert({
+    firm_id: context.firm.id,
+    actor_user_id: context.user.id,
+    entity_type: "firm",
+    entity_id: context.firm.id,
+    action: "signing_settings_updated",
+    payload: { requirePageInitials },
+  });
+
+  revalidatePath("/settings/signing");
+  revalidatePath("/", "layout");
+  return { message: "Signing settings saved." };
 }
 
 export async function savePractitionerAction(

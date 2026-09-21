@@ -30,6 +30,9 @@ export type InsertSignatureRequestInput = {
   testMode: boolean;
   sentAt: string;
   createdBy: string;
+  requirePageInitials: boolean;
+  initialsFieldCount: number;
+  pageCount: number;
 };
 
 export type UpdateSignatureRequestInput = Partial<
@@ -259,6 +262,9 @@ export function createSupabaseSignatureStore(
           test_mode: input.testMode,
           sent_at: input.sentAt,
           created_by: input.createdBy,
+          require_page_initials: input.requirePageInitials,
+          initials_field_count: input.initialsFieldCount,
+          page_count: input.pageCount,
         })
         .select("*")
         .single();
@@ -412,6 +418,9 @@ function fromRow(row: SignatureRequestRow): SignatureRequestRecord {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    requirePageInitials: row.require_page_initials !== false,
+    initialsFieldCount: row.initials_field_count ?? 0,
+    pageCount: row.page_count ?? 0,
   };
 }
 

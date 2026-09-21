@@ -144,6 +144,52 @@ describe("Dropbox Sign send request", () => {
       "https://www.lexflow.com.au/signing-complete",
     );
     expect((form.get("file[0]") as File).name).toBe("agreement-pack-v1.pdf");
+    expect(form.get("form_fields_per_document")).toBeNull();
+  });
+
+  it("sends required initials form fields and keeps execution text tags", async () => {
+    const calls: Request[] = [];
+    const sign = provider(async (input, init) => {
+      const request = new Request(input, init);
+      calls.push(request);
+      return Response.json({
+        signature_request: { signature_request_id: "sr-created" },
+      });
+    });
+
+    const fields = [
+      {
+        api_id: "client_initials_p1",
+        name: "Client initials page 1",
+        type: "initials" as const,
+        x: 493,
+        y: 46,
+        width: 48,
+        height: 18,
+        required: true,
+        signer: 0,
+        page: 1,
+      },
+    ];
+
+    await sign.createSignatureRequest({
+      title: "Costs agreement",
+      subject: SIGNING_EMAIL_SUBJECT,
+      fileName: "agreement-pack-v1.pdf",
+      fileBytes: new Uint8Array([1, 2, 3]),
+      signer: { name: "John Smith", email: "john@example.com" },
+      metadata: {},
+      signingRedirectUrl: "https://www.lexflow.com.au/signing-complete",
+      testMode: true,
+      formFieldsPerDocument: [fields],
+    });
+
+    const form = await calls[0].formData();
+    expect(form.get("use_text_tags")).toBe("1");
+    expect(form.get("form_fields_per_document")).toBe(JSON.stringify([fields]));
+    const parsed = JSON.parse(String(form.get("form_fields_per_document"))) as typeof fields[];
+    expect(parsed[0][0].type).toBe("initials");
+    expect(parsed[0][0].required).toBe(true);
   });
 
   it("surfaces provider failures without inventing a request id", async () => {

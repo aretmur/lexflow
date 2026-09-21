@@ -90,6 +90,12 @@ export class DropboxSignProvider implements SignatureProvider {
       new Blob([Uint8Array.from(input.fileBytes)], { type: "application/pdf" }),
       input.fileName,
     );
+    if (input.formFieldsPerDocument?.length) {
+      form.set(
+        "form_fields_per_document",
+        JSON.stringify(input.formFieldsPerDocument),
+      );
+    }
 
     const body = await this.requestJson<DropboxSignatureRequestBody>(
       "/signature_request/send",

@@ -4,6 +4,10 @@ import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { signedAgreementStoragePath } from "@/lib/documents/pdf/storage-path";
 import { logServerError, publicActionError } from "@/lib/server-log";
 import {
+  formFieldsPerDocument,
+  pageGeometriesFromPdf,
+} from "@/lib/signatures/form-fields";
+import {
   SIGNING_EMAIL_SUBJECT,
   signingRedirectUrl,
 } from "@/lib/signatures/text-tags";
@@ -35,6 +39,7 @@ export async function sendForSignature(input: {
   actorUserId: string;
   signer: SignatureSigner;
   testMode: boolean;
+  requirePageInitials?: boolean;
   now?: Date;
 }): Promise<SendSignatureResult> {
   const signer = parseSigner(input.signer);
@@ -58,6 +63,12 @@ export async function sendForSignature(input: {
     throw new SignatureWorkflowError("The generated agreement pack could not be retrieved.");
   }
 
+  const requirePageInitials = input.requirePageInitials !== false;
+  const pages = await pageGeometriesFromPdf(packBytes);
+  const pageCount = pages.length;
+  const formFields = formFieldsPerDocument(pages, requirePageInitials);
+  const initialsFieldCount = formFields?.[0]?.length ?? 0;
+
   let providerRequestId: string;
   try {
     const created = await input.provider.createSignatureRequest({
@@ -74,6 +85,7 @@ export async function sendForSignature(input: {
       },
       signingRedirectUrl: signingRedirectUrl(),
       testMode: input.testMode,
+      formFieldsPerDocument: formFields,
     });
     providerRequestId = created.providerRequestId;
   } catch (error) {
@@ -106,6 +118,9 @@ export async function sendForSignature(input: {
       testMode: input.testMode,
       sentAt,
       createdBy: input.actorUserId,
+      requirePageInitials,
+      initialsFieldCount,
+      pageCount,
     });
     await input.store.updateAgreementStatus(context.firmId, context.agreementId, "sent", [
       "generated",
@@ -135,6 +150,9 @@ export async function sendForSignature(input: {
       signerEmail: signer.email,
       sentAt,
       testMode: input.testMode,
+      requirePageInitials,
+      initialsFieldCount,
+      pageCount,
     },
   });
 

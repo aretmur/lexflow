@@ -8,6 +8,7 @@ const SETTINGS_LINKS = [
   { href: "/settings/firm", label: "Firm" },
   { href: "/settings/practitioners", label: "Practitioners" },
   { href: "/settings/payment", label: "Trust / payment" },
+  { href: "/settings/signing", label: "Signing" },
   { href: "/settings/attachment", label: "Required attachment" },
 ] as const;
 

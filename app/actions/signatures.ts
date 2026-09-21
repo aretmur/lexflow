@@ -55,6 +55,11 @@ export async function sendForSignatureAction(
         email: String(formData.get("signerEmail") ?? ""),
       },
       testMode: isDropboxSignTestMode(),
+      requirePageInitials:
+        formData.get("requirePageInitials") == null
+          ? firm.require_page_initials !== false
+          : formData.get("requirePageInitials") === "true" ||
+            formData.get("requirePageInitials") === "on",
     });
     refreshAgreement(agreementId);
     return { ok: true };

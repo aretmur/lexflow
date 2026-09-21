@@ -97,6 +97,7 @@ export default async function AgreementReviewPage({
         frozenAttachmentMissing={
           bundle.agreement.status === "ready" && !snapshotHasRequiredAttachment(snapshot)
         }
+        defaultRequirePageInitials={firm.require_page_initials !== false}
       />
     </div>
   );

@@ -49,6 +49,7 @@ export function AgreementReview({
   signedDocument,
   hasActiveAttachment,
   frozenAttachmentMissing,
+  defaultRequirePageInitials,
 }: {
   draft: AgreementDraft;
   status: string;
@@ -59,6 +60,7 @@ export function AgreementReview({
   signedDocument: SignaturePanelDocument | null;
   hasActiveAttachment: boolean;
   frozenAttachmentMissing: boolean;
+  defaultRequirePageInitials: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -221,6 +223,7 @@ export function AgreementReview({
           testMode={testMode}
           request={signatureRequest}
           signedDocument={signedDocument}
+          defaultRequirePageInitials={defaultRequirePageInitials}
         />
       ) : null}
 

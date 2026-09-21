@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import type { SignatureStore } from "@/lib/signatures/store";
@@ -10,6 +10,7 @@ import {
 import {
   SignatureProviderError,
   SignatureWorkflowError,
+  type CreateSignatureRequestInput,
   type ProviderWebhookEvent,
   type SignatureProvider,
   type SignatureRequestRecord,
@@ -24,10 +25,22 @@ const VERSION = "44444444-4444-4444-4444-444444444444";
 const PACK = "55555555-5555-5555-5555-555555555555";
 const USER = "66666666-6666-6666-6666-666666666666";
 
-async function signedPdf() {
+let defaultPackBytes = new Uint8Array([37, 80, 68, 70]);
+
+beforeAll(async () => {
+  defaultPackBytes = new Uint8Array(await packPdf(1));
+});
+
+async function packPdf(pageCount: number) {
   const document = await PDFDocument.create();
-  document.addPage();
+  for (let index = 0; index < pageCount; index += 1) {
+    document.addPage();
+  }
   return document.save();
+}
+
+async function signedPdf() {
+  return packPdf(1);
 }
 
 function webhook(
@@ -55,6 +68,7 @@ function memoryStore(initial?: {
   audits: string[];
   agreementStatus: string;
   uploads: string[];
+  uploadedBytes: Uint8Array[];
 } {
   const state = {
     requests: [] as SignatureRequestRecord[],
@@ -63,7 +77,8 @@ function memoryStore(initial?: {
     audits: [] as string[],
     agreementStatus: initial?.agreementStatus ?? "generated",
     uploads: [] as string[],
-    packBytes: initial?.packBytes ?? new Uint8Array([37, 80, 68, 70]),
+    uploadedBytes: [] as Uint8Array[],
+    packBytes: initial?.packBytes ?? defaultPackBytes,
     firmId: initial?.firmId ?? FIRM,
   };
 
@@ -74,6 +89,7 @@ function memoryStore(initial?: {
     audits: string[];
     agreementStatus: string;
     uploads: string[];
+    uploadedBytes: Uint8Array[];
   } = {
     ...state,
     async loadSendContext(firmId, agreementId) {
@@ -131,11 +147,12 @@ function memoryStore(initial?: {
     async downloadGeneratedPack() {
       return state.packBytes;
     },
-    async uploadSignedPdf(storagePath) {
+    async uploadSignedPdf(storagePath, bytes) {
       if (state.uploads.includes(storagePath)) {
         return;
       }
       state.uploads.push(storagePath);
+      state.uploadedBytes.push(bytes);
     },
     async insertRequest(input) {
       const record: SignatureRequestRecord = {
@@ -162,6 +179,9 @@ function memoryStore(initial?: {
         createdBy: input.createdBy,
         createdAt: input.sentAt,
         updatedAt: input.sentAt,
+        requirePageInitials: input.requirePageInitials,
+        initialsFieldCount: input.initialsFieldCount,
+        pageCount: input.pageCount,
       };
       state.requests.push(record);
       return record;
@@ -212,16 +232,25 @@ function mockProvider(overrides: Partial<SignatureProvider> = {}): SignatureProv
   created: number;
   cancelled: number;
   downloads: number;
+  lastCreate: CreateSignatureRequestInput | null;
 } {
-  const state = { created: 0, cancelled: 0, downloads: 0 };
+  const state = {
+    created: 0,
+    cancelled: 0,
+    downloads: 0,
+    lastCreate: null as CreateSignatureRequestInput | null,
+  };
   return {
     name: "dropbox_sign",
     created: 0,
     cancelled: 0,
     downloads: 0,
-    async createSignatureRequest() {
+    lastCreate: null,
+    async createSignatureRequest(input) {
       state.created += 1;
+      state.lastCreate = input;
       this.created = state.created;
+      this.lastCreate = input;
       return { providerRequestId: "sr-1" };
     },
     async getSignatureRequest(providerRequestId) {
@@ -277,6 +306,54 @@ describe("send signature request", () => {
     expect(request.status).toBe("sent");
     expect(store.agreementStatus).toBe("sent");
     expect(store.audits).toContain("signature_request_sent");
+    expect(request.requirePageInitials).toBe(true);
+    expect(request.pageCount).toBe(1);
+    expect(request.initialsFieldCount).toBe(1);
+    expect(provider.lastCreate?.formFieldsPerDocument?.[0]).toHaveLength(1);
+    expect(provider.lastCreate?.formFieldsPerDocument?.[0][0]).toMatchObject({
+      type: "initials",
+      required: true,
+      signer: 0,
+      page: 1,
+    });
+  });
+
+  it("places an initials field on every page of an 8-page pack", async () => {
+    const store = memoryStore({ packBytes: await packPdf(8) });
+    const provider = mockProvider();
+    const { request } = await sendForSignature({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+    });
+
+    expect(request.pageCount).toBe(8);
+    expect(request.initialsFieldCount).toBe(8);
+    expect(provider.lastCreate?.formFieldsPerDocument?.[0]).toHaveLength(8);
+  });
+
+  it("creates no initials fields when the setting is off", async () => {
+    const store = memoryStore({ packBytes: await packPdf(3) });
+    const provider = mockProvider();
+    const { request } = await sendForSignature({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      requirePageInitials: false,
+    });
+
+    expect(request.requirePageInitials).toBe(false);
+    expect(request.pageCount).toBe(3);
+    expect(request.initialsFieldCount).toBe(0);
+    expect(provider.lastCreate?.formFieldsPerDocument).toBeUndefined();
   });
 
   it("rejects a missing client email and leaves the agreement generated", async () => {
@@ -381,6 +458,28 @@ describe("webhook processing", () => {
     expect(store.agreementStatus).toBe("signed");
     expect(store.requests[0].status).toBe("signed");
     expect(store.audits).toContain("agreement_signed");
+  });
+
+  it("stores the completed signed PDF including initials without rewriting it", async () => {
+    const store = await sentStore();
+    const signed = await PDFDocument.create();
+    const page = signed.addPage();
+    page.drawText("AB", { x: 500, y: 46, size: 12 });
+    const bytes = await signed.save();
+    const provider = mockProvider();
+    provider.downloadSignedDocument = async () => bytes;
+
+    await handleProviderEvent({
+      store,
+      provider,
+      event: webhook("downloadable", { eventId: "initials-complete" }),
+    });
+
+    expect(store.documents[0].sha256).toBe(sha256Hex(bytes));
+    expect(store.documents[0].pageCount).toBe(1);
+    expect(store.uploadedBytes[0]).toEqual(bytes);
+    const stored = await PDFDocument.load(store.uploadedBytes[0]);
+    expect(stored.getPageCount()).toBe(1);
   });
 
   it("ignores a duplicate webhook and does not create a second signed document", async () => {

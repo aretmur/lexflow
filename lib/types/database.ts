@@ -38,6 +38,7 @@ export type Firm = {
   account_number: string | null;
   payment_reference_prefix: string | null;
   cyber_fraud_contact_phone: string | null;
+  require_page_initials: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -290,6 +291,9 @@ export type SignatureRequest = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  require_page_initials: boolean;
+  initials_field_count: number;
+  page_count: number;
 };
 
 export type SignatureWebhookEvent = {

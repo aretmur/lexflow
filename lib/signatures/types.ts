@@ -49,6 +49,20 @@ export type CreateSignatureRequestInput = {
   signingRedirectUrl: string;
   testMode: boolean;
   clientId?: string;
+  formFieldsPerDocument?: Array<
+    Array<{
+      api_id: string;
+      name: string;
+      type: "initials";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      required: boolean;
+      signer: number;
+      page: number;
+    }>
+  >;
 };
 
 export type CreateSignatureRequestResult = {
@@ -116,6 +130,9 @@ export type SignatureRequestRecord = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  requirePageInitials: boolean;
+  initialsFieldCount: number;
+  pageCount: number;
 };
 
 export type SignedAgreementDocumentRecord = {

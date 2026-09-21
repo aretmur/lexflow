@@ -52,6 +52,10 @@ export const updateFirmSchema = z.object({
   postcode: optionalText(12),
 });
 
+export const updateSigningSchema = z.object({
+  requirePageInitials: z.enum(["true", "false"]),
+});
+
 export const updatePaymentSchema = z.object({
   bankName: optionalText(120),
   accountName: optionalText(200),

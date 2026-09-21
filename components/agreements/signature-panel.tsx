@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/cn";
 import { Notice } from "@/components/ui/notice";
 import {
   formatDocumentDate,
@@ -44,6 +45,7 @@ export function SignaturePanel({
   testMode,
   request,
   signedDocument,
+  defaultRequirePageInitials,
 }: {
   agreementId: string;
   agreementStatus: string;
@@ -52,6 +54,7 @@ export function SignaturePanel({
   testMode: boolean;
   request: SignaturePanelRequest | null;
   signedDocument: SignaturePanelDocument | null;
+  defaultRequirePageInitials: boolean;
 }) {
   const router = useRouter();
   const [sendState, sendAction, sending] = useActionState(
@@ -60,6 +63,9 @@ export function SignaturePanel({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [requirePageInitials, setRequirePageInitials] = useState(
+    defaultRequirePageInitials,
+  );
   const showTestBanner = testMode || request?.testMode;
 
   async function run(
@@ -119,6 +125,43 @@ export function SignaturePanel({
                 defaultValue={defaultSignerEmail}
                 required
               />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Require client initials on every page</Label>
+            <p className="text-sm text-ink-muted">
+              When enabled, the client must initial every page of the agreement pack
+              before completing the signature request.
+            </p>
+            <input
+              type="hidden"
+              name="requirePageInitials"
+              value={requirePageInitials ? "true" : "false"}
+            />
+            <div className="inline-flex border border-rule-strong">
+              {(
+                [
+                  { value: true, label: "ON" },
+                  { value: false, label: "OFF" },
+                ] as const
+              ).map((option) => {
+                const selected = requirePageInitials === option.value;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    className={cn(
+                      "h-10 px-4 text-sm font-medium",
+                      selected
+                        ? "bg-accent text-paper-raised"
+                        : "bg-paper-raised text-ink hover:border-ink",
+                    )}
+                    onClick={() => setRequirePageInitials(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <Button type="submit" disabled={sending}>
