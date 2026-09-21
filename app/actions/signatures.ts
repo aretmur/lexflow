@@ -128,6 +128,7 @@ export async function startSigningAction(
           firmName: identity.displayName,
           signingMode: signingMode as "qr" | "email" | "same_device",
           requireEmailOtpForQr: firm.require_email_otp_for_qr,
+          emailFrom: identity.senderEmail,
           emailReplyTo: identity.replyTo,
         });
         refreshAgreement(agreementId);
@@ -220,6 +221,7 @@ export async function resendSignatureRequestAction(
         agreementId,
         actorUserId: user.id,
         firmName: identity.displayName,
+        emailFrom: identity.senderEmail,
         emailReplyTo: identity.replyTo,
       });
     } else {

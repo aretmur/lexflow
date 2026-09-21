@@ -3,6 +3,7 @@ export type EmailMessage = {
   subject: string;
   text: string;
   replyTo?: string;
+  from?: string;
 };
 
 export type EmailSendResult = {

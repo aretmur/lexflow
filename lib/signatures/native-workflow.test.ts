@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { ConsoleEmailProvider, setEmailProviderForTests } from "@/lib/email/provider";
-import { EMAIL_SEND_FAILED, EmailProviderError } from "@/lib/email/errors";
+import { EMAIL_SEND_FAILED, EMAIL_SENDER_NOT_AUTHORISED, EmailProviderError } from "@/lib/email/errors";
 import type { EmailMessage, EmailProvider, EmailSendResult } from "@/lib/email/types";
 import { CONSENT_TEXT_VERSION, consentText } from "@/lib/signatures/consent";
 import { NativeLexflowProvider } from "@/lib/signatures/native";
@@ -29,6 +29,7 @@ import {
 const nativeProvider = new NativeLexflowProvider();
 const now = new Date("2026-09-21T00:00:00.000Z");
 let packBytes = new Uint8Array([37, 80, 68, 70]);
+const originalGraphSender = process.env.MICROSOFT_GRAPH_SENDER;
 
 beforeAll(async () => {
   const document = await PDFDocument.create();
@@ -86,6 +87,11 @@ describe("native Lexflow signing", () => {
 
   afterEach(() => {
     setEmailProviderForTests(null);
+    if (originalGraphSender === undefined) {
+      delete process.env.MICROSOFT_GRAPH_SENDER;
+    } else {
+      process.env.MICROSOFT_GRAPH_SENDER = originalGraphSender;
+    }
   });
 
   it("stores a hashed token and never emails a QR session", async () => {
@@ -283,14 +289,73 @@ describe("native Lexflow signing", () => {
     expect(recording.sent[0]?.text).toContain("Octagon Legal has prepared a costs agreement");
   });
 
-  it("records the email provider and message id after acceptance", async () => {
+  it("records Microsoft Graph acceptance without a message id", async () => {
     const store = createStore();
-    const recording = new RecordingEmailProvider();
-    setEmailProviderForTests(recording);
-    await startNativeSigning(startInput(store, { signingMode: "email" }));
-    expect(store.requests[0].emailProvider).toBe("resend");
-    expect(store.requests[0].emailMessageId).toBe("msg_retry");
+    process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
+    setEmailProviderForTests(new GraphAcceptingProvider());
+    await startNativeSigning(
+      startInput(store, {
+        signingMode: "email",
+        firmName: "Octagon Legal",
+        emailFrom: "intake@octagonlegal.au",
+        emailReplyTo: "intake@octagonlegal.au",
+      }),
+    );
+    expect(store.requests[0].emailProvider).toBe("microsoft_graph");
+    expect(store.requests[0].emailMessageId).toBeNull();
     expect(store.requests[0].emailSentAt).toBeTruthy();
+    expect(store.requests[0].sentAt).toBeTruthy();
+  });
+
+  it("does not mark Sent when Graph sending fails and can retry the same request", async () => {
+    const store = createStore();
+    process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
+    setEmailProviderForTests(new GraphFailingProvider());
+    await expect(
+      startNativeSigning(
+        startInput(store, {
+          signingMode: "email",
+          firmName: "Octagon Legal",
+          emailFrom: "intake@octagonlegal.au",
+        }),
+      ),
+    ).rejects.toThrow(EMAIL_SEND_FAILED);
+    expect(store.requests).toHaveLength(1);
+    expect(store.requests[0].emailSentAt).toBeNull();
+    expect(store.requests[0].lastError).toBe(EMAIL_SEND_FAILED);
+
+    setEmailProviderForTests(new GraphAcceptingProvider());
+    await resendNativeSigningLink({
+      store,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      firmName: "Octagon Legal",
+      emailFrom: "intake@octagonlegal.au",
+      now,
+    });
+    expect(store.requests).toHaveLength(1);
+    expect(store.requests[0].emailProvider).toBe("microsoft_graph");
+    expect(store.requests[0].emailMessageId).toBeNull();
+    expect(store.requests[0].emailSentAt).toBeTruthy();
+    expect(store.requests[0].lastError).toBeNull();
+  });
+
+  it("does not send through another firm's mailbox", async () => {
+    const store = createStore();
+    process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
+    const graph = new GraphAcceptingProvider();
+    setEmailProviderForTests(graph);
+    await expect(
+      startNativeSigning(
+        startInput(store, {
+          signingMode: "email",
+          emailFrom: "otherfirm@example.com",
+        }),
+      ),
+    ).rejects.toThrow(EMAIL_SENDER_NOT_AUTHORISED);
+    expect(graph.calls).toBe(0);
+    expect(store.requests[0].emailSentAt).toBeNull();
   });
 });
 
@@ -316,5 +381,23 @@ class RecordingEmailProvider implements EmailProvider {
   async send(message: EmailMessage): Promise<EmailSendResult> {
     this.sent.push(message);
     return { provider: this.name, messageId: "msg_retry" };
+  }
+}
+
+class GraphAcceptingProvider implements EmailProvider {
+  readonly name = "microsoft_graph";
+  calls = 0;
+  readonly sent: EmailMessage[] = [];
+  async send(message: EmailMessage): Promise<EmailSendResult> {
+    this.calls += 1;
+    this.sent.push(message);
+    return { provider: this.name, messageId: null };
+  }
+}
+
+class GraphFailingProvider implements EmailProvider {
+  readonly name = "microsoft_graph";
+  async send(): Promise<EmailSendResult> {
+    throw new EmailProviderError(EMAIL_SEND_FAILED);
   }
 }

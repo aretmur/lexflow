@@ -28,7 +28,9 @@ describe("email secrets stay server-side", () => {
     expect(clientFiles.length).toBeGreaterThan(0);
     for (const file of clientFiles) {
       const source = readFileSync(file, "utf8");
-      expect(source, file).not.toMatch(/RESEND_API_KEY|lib\/email|from "resend"|from 'resend'/);
+      expect(source, file).not.toMatch(
+        /RESEND_API_KEY|MICROSOFT_CLIENT_SECRET|MICROSOFT_TENANT_ID|MICROSOFT_CLIENT_ID|MICROSOFT_GRAPH_SENDER|lib\/email|from "resend"|from 'resend'|@azure\/msal-node|graph\.microsoft\.com/,
+      );
     }
   });
 });

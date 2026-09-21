@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { EMAIL_SEND_FAILED, EmailProviderError, getEmailProvider } from "@/lib/email/provider";
+import { emailsMatch, getMicrosoftGraphSender } from "@/lib/email/config";
+import {
+  EMAIL_SEND_FAILED,
+  EMAIL_SENDER_NOT_AUTHORISED,
+  EmailProviderError,
+  getEmailProvider,
+} from "@/lib/email/provider";
 import { signingLinkEmail, signingOtpEmail } from "@/lib/email/templates";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { signedAgreementStoragePath } from "@/lib/documents/pdf/storage-path";
@@ -95,6 +101,7 @@ export async function startNativeSigning(input: {
   signingMode: NativeSigningMode;
   requirePageInitials?: boolean;
   requireEmailOtpForQr?: boolean;
+  emailFrom?: string | null;
   emailReplyTo?: string | null;
   replaceActive?: boolean;
   now?: Date;
@@ -116,6 +123,7 @@ export async function startNativeSigning(input: {
         signer,
         signingUrl: rotated.signingUrl,
         firmName: input.firmName,
+        emailFrom: input.emailFrom,
         replyTo: input.emailReplyTo,
         now: input.now,
       });
@@ -195,6 +203,7 @@ export async function startNativeSigning(input: {
       signer,
       signingUrl,
       firmName: input.firmName,
+      emailFrom: input.emailFrom,
       replyTo: input.emailReplyTo,
       now: input.now,
     });
@@ -536,6 +545,7 @@ export async function resendNativeSigningLink(input: {
   agreementId: string;
   actorUserId: string;
   firmName?: string;
+  emailFrom?: string | null;
   emailReplyTo?: string | null;
   now?: Date;
 }) {
@@ -552,6 +562,7 @@ export async function resendNativeSigningLink(input: {
     signer: { name: rotated.request.signerName, email: rotated.request.signerEmail },
     signingUrl: rotated.signingUrl,
     firmName: input.firmName || rotated.request.firmDisplayName || "Lexflow",
+    emailFrom: input.emailFrom,
     replyTo: input.emailReplyTo,
     now: input.now,
   });
@@ -628,6 +639,7 @@ async function deliverSigningLinkEmail(input: {
   signer: SignatureSigner;
   signingUrl: string;
   firmName: string;
+  emailFrom?: string | null;
   replyTo?: string | null;
   now?: Date;
 }) {
@@ -637,10 +649,17 @@ async function deliverSigningLinkEmail(input: {
     signingUrl: input.signingUrl,
   });
   try {
-    const result = await getEmailProvider().send({
+    const provider = getEmailProvider();
+    if (provider.name === "microsoft_graph") {
+      if (!emailsMatch(input.emailFrom, getMicrosoftGraphSender())) {
+        throw new EmailProviderError(EMAIL_SENDER_NOT_AUTHORISED);
+      }
+    }
+    const result = await provider.send({
       to: input.signer.email,
       subject: message.subject,
       text: message.text,
+      from: input.emailFrom?.trim() || undefined,
       replyTo: input.replyTo?.trim() || undefined,
     });
     const sentAt = (input.now ?? new Date()).toISOString();
