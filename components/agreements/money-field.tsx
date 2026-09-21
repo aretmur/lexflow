@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { centsToInputString, parseOptionalAudToCents } from "@/lib/money";
+import { centsToInputString, interpretMoneyFieldText } from "@/lib/money";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -22,6 +22,25 @@ export function MoneyField({
   const [text, setText] = useState(centsToInputString(valueCents));
   const [error, setError] = useState<string | null>(null);
 
+  function applyText(nextText: string, { blur }: { blur: boolean }) {
+    const interpretation = interpretMoneyFieldText(nextText);
+    if (interpretation.status === "valid") {
+      setError(null);
+      if (interpretation.cents !== valueCents) {
+        onChange(interpretation.cents);
+      }
+      if (blur) {
+        setText(centsToInputString(interpretation.cents));
+      }
+      return;
+    }
+    if (interpretation.status === "incomplete") {
+      setError(null);
+      return;
+    }
+    setError(interpretation.message);
+  }
+
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
@@ -32,23 +51,19 @@ export function MoneyField({
         className={
           disabled ? "cursor-not-allowed bg-paper text-ink-muted" : undefined
         }
-        value={focused ? text : centsToInputString(valueCents)}
+        value={focused || error ? text : centsToInputString(valueCents)}
         onFocus={() => {
           setText(centsToInputString(valueCents));
           setFocused(true);
         }}
         onChange={(event) => {
-          setText(event.target.value);
-          setError(null);
+          const nextText = event.target.value;
+          setText(nextText);
+          applyText(nextText, { blur: false });
         }}
         onBlur={() => {
           setFocused(false);
-          try {
-            const cents = parseOptionalAudToCents(text);
-            onChange(cents);
-          } catch (caught) {
-            setError(caught instanceof Error ? caught.message : "Invalid amount");
-          }
+          applyText(text, { blur: true });
         }}
       />
       {error ? <p className="text-xs text-danger">{error}</p> : null}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveAgreementDraftAction } from "@/app/actions/agreements";
+import { createSerialSaveQueue } from "@/lib/agreements/draft-save-queue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,10 +37,31 @@ export function AgreementForm({
   >[];
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState(initialDraft);
+  const [draft, setDraftState] = useState(initialDraft);
   const [saveState, setSaveState] = useState("Saved");
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const skipFirst = useRef(true);
+  const draftRef = useRef(initialDraft);
+  const debounceRef = useRef<number | null>(null);
+  const reviewingRef = useRef(false);
+  const queueRef = useRef(
+    createSerialSaveQueue(async (nextDraft: AgreementDraft) => {
+      const result = await saveAgreementDraftAction(nextDraft);
+      if (result.error) {
+        return { error: result.error };
+      }
+      return { ok: true };
+    }),
+  );
+
+  function updateDraft(updater: (current: AgreementDraft) => AgreementDraft) {
+    setDraftState((current) => {
+      const next = updater(current);
+      draftRef.current = next;
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (skipFirst.current) {
@@ -47,17 +69,27 @@ export function AgreementForm({
       return;
     }
     setSaveState("Saving…");
-    const handle = window.setTimeout(async () => {
-      const result = await saveAgreementDraftAction(draft);
-      if (result.error) {
-        setSaveState("Save failed");
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      setSaveState("Saved");
+    debounceRef.current = window.setTimeout(() => {
+      debounceRef.current = null;
+      void queueRef.current.enqueue(draftRef.current).then((result) => {
+        if (reviewingRef.current) {
+          return;
+        }
+        if ("error" in result) {
+          setSaveState("Save failed");
+          setError(result.error);
+          return;
+        }
+        setError(null);
+        setSaveState("Saved");
+      });
     }, 700);
-    return () => window.clearTimeout(handle);
+    return () => {
+      if (debounceRef.current !== null) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, [draft]);
 
   const shortForm = calculateShortFormPricing(draft.pricing);
@@ -73,28 +105,47 @@ export function AgreementForm({
     key: K,
     value: AgreementDraft["pricing"][K],
   ) {
-    setDraft((current) => ({
+    updateDraft((current) => ({
       ...current,
       pricing: { ...current.pricing, [key]: value },
     }));
+  }
+
+  async function handleReview() {
+    if (reviewingRef.current) {
+      return;
+    }
+    reviewingRef.current = true;
+    setReviewing(true);
+    setSaveState("Saving…");
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (typeof document !== "undefined") {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        active.blur();
+      }
+    }
+    const latest = draftRef.current;
+    const result = await queueRef.current.saveNow(latest);
+    if ("error" in result) {
+      reviewingRef.current = false;
+      setReviewing(false);
+      setSaveState("Save failed");
+      setError(result.error);
+      return;
+    }
+    router.push(`/agreements/${latest.agreementId}`);
   }
 
   return (
     <div className="space-y-10">
       <div className="flex items-center justify-between gap-4">
         <p className="text-xs uppercase tracking-[0.14em] text-ink-muted">{saveState}</p>
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            const result = await saveAgreementDraftAction(draft);
-            if (result.error) {
-              setError(result.error);
-              return;
-            }
-            router.push(`/agreements/${draft.agreementId}`);
-          }}
-        >
-          Review
+        <Button variant="secondary" disabled={reviewing} onClick={() => void handleReview()}>
+          {reviewing ? "Saving…" : "Review"}
         </Button>
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
@@ -108,7 +159,7 @@ export function AgreementForm({
               id="clientName"
               value={draft.client.fullName}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, fullName: event.target.value },
                 }))
@@ -122,7 +173,7 @@ export function AgreementForm({
               type="email"
               value={draft.client.email}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, email: event.target.value },
                 }))
@@ -135,7 +186,7 @@ export function AgreementForm({
               id="clientPhone"
               value={draft.client.phone}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, phone: event.target.value },
                 }))
@@ -148,7 +199,7 @@ export function AgreementForm({
               id="clientAddress"
               value={draft.client.addressLine1}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, addressLine1: event.target.value },
                 }))
@@ -161,7 +212,7 @@ export function AgreementForm({
               id="clientSuburb"
               value={draft.client.suburb}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, suburb: event.target.value },
                 }))
@@ -174,7 +225,7 @@ export function AgreementForm({
               id="clientState"
               value={draft.client.state}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, state: event.target.value },
                 }))
@@ -187,7 +238,7 @@ export function AgreementForm({
               id="clientPostcode"
               value={draft.client.postcode}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   client: { ...current.client, postcode: event.target.value },
                 }))
@@ -206,7 +257,7 @@ export function AgreementForm({
               id="matterNumber"
               value={draft.matter.referenceNumber}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   matter: { ...current.matter, referenceNumber: event.target.value },
                 }))
@@ -220,7 +271,7 @@ export function AgreementForm({
               type="date"
               value={draft.matter.instructionsDate}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   matter: { ...current.matter, instructionsDate: event.target.value },
                 }))
@@ -233,7 +284,7 @@ export function AgreementForm({
               id="matterTitle"
               value={draft.matter.title}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   matter: { ...current.matter, title: event.target.value },
                 }))
@@ -246,7 +297,7 @@ export function AgreementForm({
               id="matterDescription"
               value={draft.matter.description}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   matter: { ...current.matter, description: event.target.value },
                 }))
@@ -260,7 +311,7 @@ export function AgreementForm({
               value={draft.matter.responsiblePractitionerId}
               onChange={(event) => {
                 const practitioner = practitioners.find((item) => item.id === event.target.value);
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   matter: {
                     ...current.matter,
@@ -304,7 +355,7 @@ export function AgreementForm({
               id="generalScope"
               value={draft.generalScopeStatement}
               onChange={(event) =>
-                setDraft((current) => ({
+                updateDraft((current) => ({
                   ...current,
                   generalScopeStatement: event.target.value,
                 }))
@@ -314,7 +365,7 @@ export function AgreementForm({
         ) : null}
         <ScopeList
           items={draft.scopeItems}
-          onChange={(scopeItems) => setDraft((current) => ({ ...current, scopeItems }))}
+          onChange={(scopeItems) => updateDraft((current) => ({ ...current, scopeItems }))}
         />
         {!isShort ? (
           <div className="space-y-2">
@@ -323,7 +374,7 @@ export function AgreementForm({
               id="exclusions"
               value={draft.exclusions}
               onChange={(event) =>
-                setDraft((current) => ({ ...current, exclusions: event.target.value }))
+                updateDraft((current) => ({ ...current, exclusions: event.target.value }))
               }
             />
           </div>
@@ -352,7 +403,7 @@ export function AgreementForm({
                       const practitioner = practitioners.find(
                         (item) => item.id === draft.matter.responsiblePractitionerId,
                       );
-                      setDraft((current) =>
+                      updateDraft((current) =>
                         applyShortFormPricingType(
                           current,
                           basis,
@@ -457,7 +508,7 @@ export function AgreementForm({
             <h2 className="font-serif text-xl">Stages</h2>
             <StageList
               stages={draft.stages}
-              onChange={(stages) => setDraft((current) => ({ ...current, stages }))}
+              onChange={(stages) => updateDraft((current) => ({ ...current, stages }))}
             />
           </section>
 

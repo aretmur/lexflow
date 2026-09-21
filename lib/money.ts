@@ -76,6 +76,30 @@ export function parseOptionalAudToCents(input: string): Cents {
   return assertNonNegativeCents(parseAudToCents(input), "amount");
 }
 
+export type MoneyFieldInterpretation =
+  | { status: "valid"; cents: Cents }
+  | { status: "incomplete" }
+  | { status: "invalid"; message: string };
+
+function looksLikeIncompleteMoneyText(text: string): boolean {
+  const compact = text.trim().replace(/[$,\s]/g, "");
+  return compact === "" || compact === "." || /^\d+\.$/.test(compact) || /^\.\d{0,2}$/.test(compact);
+}
+
+export function interpretMoneyFieldText(text: string): MoneyFieldInterpretation {
+  try {
+    return { status: "valid", cents: parseOptionalAudToCents(text) };
+  } catch (caught) {
+    if (looksLikeIncompleteMoneyText(text)) {
+      return { status: "incomplete" };
+    }
+    return {
+      status: "invalid",
+      message: caught instanceof Error ? caught.message : "Invalid amount",
+    };
+  }
+}
+
 export function centsToInputString(cents: Cents): string {
   const amount = assertNonNegativeCents(cents);
   if (amount === 0) {
