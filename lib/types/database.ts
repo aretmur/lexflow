@@ -268,8 +268,8 @@ export type GeneratedAgreementPack = {
   sha256: string;
   page_count: number;
   byte_size: number;
-  agreement_page_count: number;
-  attachment_page_count: number;
+  agreement_page_count: number | null;
+  attachment_page_count: number | null;
 };
 
 export type SignatureRequest = {

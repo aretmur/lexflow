@@ -207,8 +207,8 @@ export type SignatureSendContext = {
   packVersionNumber: number;
   packSha256: string;
   packPageCount: number;
-  agreementPageCount: number;
-  attachmentPageCount: number;
+  agreementPageCount: number | null;
+  attachmentPageCount: number | null;
   activeRequest: SignatureRequestRecord | null;
 };
 

@@ -37,6 +37,9 @@ import {
 } from "@/lib/signatures/workflow";
 import { publicActionError } from "@/lib/server-log";
 
+export const LEGACY_PACK_SIGNING_ERROR =
+  "This agreement was generated before signing metadata was added. Create a new agreement version and generate it again before signing.";
+
 const nativeModes = ["qr", "email", "same_device"] as const;
 type NativeSigningMode = (typeof nativeModes)[number];
 
@@ -97,6 +100,7 @@ export async function startNativeSigning(input: {
 }) {
   const signer = parseSigner(input.signer);
   const context = await prepareSendContext(input, input.signingMode);
+  const pageSplit = requirePackPageSplit(context);
   if (context.activeRequest && isNativeMode(context.activeRequest.signingMode)) {
     const rotated = await rotateSigningToken({
       store: input.store,
@@ -146,8 +150,8 @@ export async function startNativeSigning(input: {
     startedAt: sentAt,
     initiatedByUserId: input.actorUserId,
     generatedDocumentSha256: context.packSha256,
-    executionPage: executionPageNumber(context.agreementPageCount, pages.length),
-    agreementPageCount: context.agreementPageCount,
+    executionPage: executionPageNumber(pageSplit.agreementPageCount, pages.length),
+    agreementPageCount: pageSplit.agreementPageCount,
     firmDisplayName: input.firmName,
     emailVerifiedAt:
       input.signingMode === "email" || input.requireEmailOtpForQr ? null : sentAt,
@@ -379,6 +383,10 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
   if (!context) {
     throw new SignatureWorkflowError("Agreement not found.");
   }
+  const pageSplit = requirePackPageSplit({
+    agreementPageCount: request.agreementPageCount ?? context.agreementPageCount,
+    attachmentPageCount: context.attachmentPageCount,
+  });
   const packBytes = await input.store.downloadGeneratedPack(context.packStoragePath);
   if (!packBytes) {
     throw new SignatureWorkflowError("The generated agreement pack could not be retrieved.");
@@ -389,7 +397,7 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
     packBytes,
     expectedSha256: expectedHash,
     requirePageInitials: request.requirePageInitials,
-    agreementPageCount: request.agreementPageCount ?? context.agreementPageCount,
+    agreementPageCount: pageSplit.agreementPageCount,
     initials: input.initials,
     initialledPages: input.initialledPages,
     signature: input.signature,
@@ -515,6 +523,19 @@ export async function resendNativeSigningLink(input: {
 
 function requiresOtp(request: SignatureRequestRecord) {
   return request.signingMode === "email" || !request.emailVerifiedAt;
+}
+
+function requirePackPageSplit(context: {
+  agreementPageCount: number | null;
+  attachmentPageCount: number | null;
+}) {
+  if (context.agreementPageCount == null || context.attachmentPageCount == null) {
+    throw new SignatureWorkflowError(LEGACY_PACK_SIGNING_ERROR);
+  }
+  return {
+    agreementPageCount: context.agreementPageCount,
+    attachmentPageCount: context.attachmentPageCount,
+  };
 }
 
 function isNativeMode(mode: SigningMode) {

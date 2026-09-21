@@ -6,6 +6,7 @@ import { CONSENT_TEXT_VERSION, consentText } from "@/lib/signatures/consent";
 import { NativeLexflowProvider } from "@/lib/signatures/native";
 import {
   completeNativeSigning,
+  LEGACY_PACK_SIGNING_ERROR,
   resolveNativeSigningSession,
   sendNativeSigningOtp,
   startNativeSigning,
@@ -190,5 +191,48 @@ describe("native Lexflow signing", () => {
     await expect(
       startNativeSigning(startInput(store, { firmId: OTHER_FIRM })),
     ).rejects.toBeInstanceOf(SignatureWorkflowError);
+  });
+
+  it("preserves null page-split metadata on a legacy generated pack", async () => {
+    const store = memoryStore({
+      packBytes,
+      agreementPageCount: null,
+      attachmentPageCount: null,
+    });
+    const context = await store.loadSendContext(FIRM, AGREEMENT);
+    expect(context?.agreementPageCount).toBeNull();
+    expect(context?.attachmentPageCount).toBeNull();
+    expect(context?.packPageCount).toBe(1);
+  });
+
+  it("refuses native signing for a legacy pack rather than guessing the execution page", async () => {
+    const store = memoryStore({
+      packBytes,
+      packPageCount: 5,
+      agreementPageCount: null,
+      attachmentPageCount: null,
+    });
+    await expect(startNativeSigning(startInput(store))).rejects.toThrow(LEGACY_PACK_SIGNING_ERROR);
+    expect(store.requests).toHaveLength(0);
+    expect(store.agreementStatus).toBe("generated");
+  });
+
+  it("records the execution page from agreement_page_count, not the total pack page count", async () => {
+    const document = await PDFDocument.create();
+    for (let index = 0; index < 5; index += 1) {
+      document.addPage();
+    }
+    const pages = new Uint8Array(await document.save());
+    const store = memoryStore({
+      packBytes: pages,
+      packPageCount: 5,
+      agreementPageCount: 3,
+      attachmentPageCount: 2,
+    });
+    const started = await startNativeSigning(startInput(store));
+    expect(started.request.agreementPageCount).toBe(3);
+    expect(started.request.pageCount).toBe(5);
+    expect(started.request.executionPage).toBe(3);
+    expect(started.request.executionPage).not.toBe(5);
   });
 });

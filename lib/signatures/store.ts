@@ -217,8 +217,8 @@ export function createSupabaseSignatureStore(
         packVersionNumber: pack.version_number,
         packSha256: pack.sha256,
         packPageCount: pack.page_count,
-        agreementPageCount: pack.agreement_page_count ?? pack.page_count,
-        attachmentPageCount: pack.attachment_page_count ?? 0,
+        agreementPageCount: pack.agreement_page_count ?? null,
+        attachmentPageCount: pack.attachment_page_count ?? null,
         activeRequest: active ? fromRow(active) : null,
       };
     },

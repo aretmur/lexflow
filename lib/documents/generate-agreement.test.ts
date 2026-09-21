@@ -181,6 +181,25 @@ describe("attachment merge", () => {
     expect(pack.attachmentPageCount).toBe(2);
   });
 
+  it("records the correct agreement_page_count for a newly generated pack", async () => {
+    const pack = await generateAgreementPackBytes({
+      snapshot: shortFormSnapshot(),
+      attachmentBytes: await blankPdf(2),
+    });
+    expect(pack.agreementPageCount).toBeGreaterThan(0);
+    expect(pack.agreementPageCount).toBe(pack.pageCount - pack.attachmentPageCount);
+    expect(pack.agreementPageCount).not.toBe(pack.pageCount);
+  });
+
+  it("records the correct attachment_page_count for a newly generated pack", async () => {
+    const pack = await generateAgreementPackBytes({
+      snapshot: shortFormSnapshot(),
+      attachmentBytes: await blankPdf(2),
+    });
+    expect(pack.attachmentPageCount).toBe(2);
+    expect(pack.pageCount).toBe(pack.agreementPageCount + 2);
+  });
+
   it("appends attachment pages after the generated agreement without changing page sizes", async () => {
     const agreement = await blankPdf(3);
     const attachment = await blankPdf(2, [400, 500]);

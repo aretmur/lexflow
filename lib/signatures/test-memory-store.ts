@@ -17,6 +17,9 @@ export function memoryStore(initial?: {
   agreementStatus?: string;
   firmId?: string;
   packBytes?: Uint8Array;
+  packPageCount?: number;
+  agreementPageCount?: number | null;
+  attachmentPageCount?: number | null;
 }): SignatureStore & {
   requests: SignatureRequestRecord[];
   documents: SignedAgreementDocumentRecord[];
@@ -62,9 +65,10 @@ export function memoryStore(initial?: {
         packStoragePath: `${FIRM}/${AGREEMENT}/version-1/agreement-pack.pdf`,
         packVersionNumber: 1,
         packSha256: sha256Hex(state.packBytes),
-        packPageCount: 1,
-        agreementPageCount: 1,
-        attachmentPageCount: 0,
+        packPageCount: initial?.packPageCount ?? 1,
+        agreementPageCount: initial?.agreementPageCount === undefined ? 1 : initial.agreementPageCount,
+        attachmentPageCount:
+          initial?.attachmentPageCount === undefined ? 0 : initial.attachmentPageCount,
         activeRequest:
           state.requests.find((request) =>
             ["pending", "sent", "viewed"].includes(request.status),

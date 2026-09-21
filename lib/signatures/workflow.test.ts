@@ -58,11 +58,7 @@ function webhook(
   };
 }
 
-function memoryStore(initial?: {
-  agreementStatus?: string;
-  firmId?: string;
-  packBytes?: Uint8Array;
-}) {
+function memoryStore(initial?: Parameters<typeof createMemoryStore>[0]) {
   return createMemoryStore({
     ...initial,
     packBytes: initial?.packBytes ?? defaultPackBytes,
@@ -279,6 +275,24 @@ describe("send signature request", () => {
       }),
     ).rejects.toThrow(/not found/i);
     expect(store.requests).toHaveLength(0);
+  });
+
+  it("sends a Dropbox request without pack page-split metadata", async () => {
+    const store = memoryStore({
+      agreementPageCount: null,
+      attachmentPageCount: null,
+    });
+    await sendForSignature({
+      store,
+      provider: mockProvider(),
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+    });
+    expect(store.requests).toHaveLength(1);
+    expect(store.agreementStatus).toBe("sent");
   });
 });
 

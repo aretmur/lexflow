@@ -21,19 +21,11 @@ alter table public.generated_agreement_packs
   add column if not exists agreement_page_count integer,
   add column if not exists attachment_page_count integer;
 
-update public.generated_agreement_packs
-set
-  agreement_page_count = coalesce(agreement_page_count, page_count),
-  attachment_page_count = coalesce(attachment_page_count, 0)
-where agreement_page_count is null or attachment_page_count is null;
+comment on column public.generated_agreement_packs.agreement_page_count is
+  'Page count of the generated costs agreement before the required attachment. Null on packs generated before this column existed. Do not backfill; packs are immutable.';
 
-alter table public.generated_agreement_packs
-  alter column agreement_page_count set default 1,
-  alter column attachment_page_count set default 0;
-
-alter table public.generated_agreement_packs
-  alter column agreement_page_count set not null,
-  alter column attachment_page_count set not null;
+comment on column public.generated_agreement_packs.attachment_page_count is
+  'Page count of the appended required attachment. Null on packs generated before this column existed. Do not backfill; packs are immutable.';
 
 alter table public.signature_requests
   drop constraint if exists signature_requests_provider_check;
