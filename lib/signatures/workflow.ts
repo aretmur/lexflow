@@ -18,6 +18,7 @@ import {
   SIGNING_EMAIL_SUBJECT,
   signingRedirectUrl,
 } from "@/lib/signatures/text-tags";
+import { getSignatureProvider } from "@/lib/signatures/provider";
 import type { SignatureStore } from "@/lib/signatures/store";
 import {
   SignatureProviderError,
@@ -454,7 +455,7 @@ export async function resendSignatureRequest(input: {
 
 export async function cancelSignatureRequest(input: {
   store: SignatureStore;
-  provider: SignatureProvider;
+  provider: Pick<SignatureProvider, "name" | "cancelSignatureRequest">;
   firmId: string;
   agreementId: string;
   actorUserId: string;
@@ -462,19 +463,28 @@ export async function cancelSignatureRequest(input: {
 }): Promise<void> {
   const context = await input.store.loadSendContext(input.firmId, input.agreementId);
   const request = context?.activeRequest;
-  if (!context || context.firmId !== input.firmId || !request?.providerRequestId) {
+  if (!context || context.firmId !== input.firmId || !request) {
     throw new SignatureWorkflowError("There is no outstanding signature request to cancel.");
   }
 
-  try {
-    await input.provider.cancelSignatureRequest(request.providerRequestId);
-  } catch (error) {
-    throw new SignatureWorkflowError(
-      publicActionError(
-        error instanceof Error ? error.message : undefined,
-        "Unable to cancel the signing request.",
-      ),
-    );
+  if (request.provider !== "native_lexflow") {
+    if (!request.providerRequestId) {
+      throw new SignatureWorkflowError("There is no outstanding signature request to cancel.");
+    }
+    const provider =
+      input.provider.name === request.provider
+        ? input.provider
+        : getSignatureProvider(request.provider);
+    try {
+      await provider.cancelSignatureRequest(request.providerRequestId);
+    } catch (error) {
+      throw new SignatureWorkflowError(
+        publicActionError(
+          error instanceof Error ? error.message : undefined,
+          "Unable to cancel the signing request.",
+        ),
+      );
+    }
   }
 
   const cancelledAt = (input.now ?? new Date()).toISOString();
@@ -484,6 +494,8 @@ export async function cancelSignatureRequest(input: {
     lastError: null,
     signingTokenHash: null,
     signingTokenExpiresAt: null,
+    otpHash: null,
+    otpExpiresAt: null,
   });
   await input.store.updateAgreementStatus(request.firmId, request.costsAgreementId, "generated", [
     "sent",
@@ -806,7 +818,7 @@ async function resolveVersionNumber(store: SignatureStore, request: SignatureReq
   return context?.versionNumber ?? 1;
 }
 
-function parseSigner(signer: SignatureSigner): SignatureSigner {
+export function parseSigner(signer: SignatureSigner): SignatureSigner {
   const parsed = signerSchema.safeParse(signer);
   if (!parsed.success) {
     throw new SignatureWorkflowError(parsed.error.issues[0]?.message ?? "Invalid signer details.");
@@ -814,10 +826,10 @@ function parseSigner(signer: SignatureSigner): SignatureSigner {
   return parsed.data;
 }
 
-async function prepareSendContext(
+export async function prepareSendContext(
   input: {
     store: SignatureStore;
-    provider: SignatureProvider;
+    provider: Pick<SignatureProvider, "name" | "cancelSignatureRequest">;
     firmId: string;
     agreementId: string;
     actorUserId: string;
@@ -832,7 +844,10 @@ async function prepareSendContext(
   }
 
   const active = context.activeRequest;
-  if (active && active.signingMode !== desiredMode) {
+  if (
+    active &&
+    (active.signingMode !== desiredMode || active.provider !== input.provider.name)
+  ) {
     if (!input.replaceActive) {
       throw new SignatureWorkflowError(
         "A signature request is already outstanding for this agreement.",
@@ -882,7 +897,7 @@ async function loadPackFields(
   };
 }
 
-function issueSigningToken(now?: Date) {
+export function issueSigningToken(now?: Date) {
   const issued = createSigningToken();
   return {
     token: issued.token,
@@ -891,7 +906,7 @@ function issueSigningToken(now?: Date) {
   };
 }
 
-async function rotateSigningToken(input: {
+export async function rotateSigningToken(input: {
   store: SignatureStore;
   request: SignatureRequestRecord;
   actorUserId: string;

@@ -1,4 +1,5 @@
-import { getSignatureProvider } from "@/lib/signatures/provider";
+import { DropboxSignProvider } from "@/lib/signatures/dropbox-sign";
+import { getDropboxSignConfig } from "@/lib/signatures/config";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
 import { handleProviderEvent } from "@/lib/signatures/workflow";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const payload = JSON.parse(raw) as {
       event?: { event_time?: string | number; event_type?: string; event_hash?: string };
     };
-    const provider = getSignatureProvider();
+    const provider = new DropboxSignProvider(getDropboxSignConfig());
     const eventTime = String(payload.event?.event_time ?? "");
     const eventType = String(payload.event?.event_type ?? "");
     const eventHash = String(payload.event?.event_hash ?? "");

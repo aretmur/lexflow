@@ -182,6 +182,8 @@ export async function updateSigningAction(
 
   const parsed = updateSigningSchema.safeParse({
     requirePageInitials: formData.get("requirePageInitials"),
+    requireEmailOtpForQr: formData.get("requireEmailOtpForQr") || "false",
+    signingProvider: formData.get("signingProvider") || "native_lexflow",
   });
 
   if (!parsed.success) {
@@ -189,10 +191,16 @@ export async function updateSigningAction(
   }
 
   const requirePageInitials = parsed.data.requirePageInitials === "true";
+  const requireEmailOtpForQr = parsed.data.requireEmailOtpForQr === "true";
+  const signingProvider = parsed.data.signingProvider ?? "native_lexflow";
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("firms")
-    .update({ require_page_initials: requirePageInitials })
+    .update({
+      require_page_initials: requirePageInitials,
+      require_email_otp_for_qr: requireEmailOtpForQr,
+      signing_provider: signingProvider,
+    })
     .eq("id", context.firm.id);
 
   if (error) {
@@ -205,7 +213,11 @@ export async function updateSigningAction(
     entity_type: "firm",
     entity_id: context.firm.id,
     action: "signing_settings_updated",
-    payload: { requirePageInitials },
+    payload: {
+      requirePageInitials,
+      requireEmailOtpForQr,
+      signingProvider,
+    },
   });
 
   revalidatePath("/settings/signing");

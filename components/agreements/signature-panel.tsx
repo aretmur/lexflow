@@ -110,7 +110,7 @@ export function SignaturePanel({
 
   async function start(mode: SigningMode) {
     const result = await run(() => startSigningAction(formData(mode)));
-    if (mode === "embedded_same_device" && result.signingUrl) {
+    if ((mode === "same_device" || mode === "embedded_same_device") && result.signingUrl) {
       window.location.assign(result.signingUrl);
     }
   }
@@ -136,7 +136,9 @@ export function SignaturePanel({
     (request?.status === "signed" || Boolean(request?.signedAt));
   const embedded =
     request?.signingMode === "embedded_qr" ||
-    request?.signingMode === "embedded_same_device";
+    request?.signingMode === "embedded_same_device" ||
+    request?.signingMode === "qr" ||
+    request?.signingMode === "same_device";
   const statusLabel = signingStatusLabel(request, Boolean(signedDocument));
 
   return (
@@ -191,7 +193,7 @@ export function SignaturePanel({
                 type="button"
                 className="h-12 px-6 text-base"
                 disabled={pending}
-                onClick={() => start("embedded_qr")}
+                onClick={() => start("qr")}
               >
                 {pending ? "Starting…" : "Show QR code"}
               </Button>
@@ -209,7 +211,7 @@ export function SignaturePanel({
                 type="button"
                 variant="ghost"
                 disabled={pending}
-                onClick={() => start("embedded_same_device")}
+                onClick={() => start("same_device")}
               >
                 Sign on this device
               </Button>
@@ -422,10 +424,10 @@ function InitialsToggle({
 }
 
 function methodLabel(mode: SigningMode) {
-  if (mode === "embedded_qr") {
+  if (mode === "embedded_qr" || mode === "qr") {
     return "QR";
   }
-  if (mode === "embedded_same_device") {
+  if (mode === "embedded_same_device" || mode === "same_device") {
     return "This device";
   }
   return "Email";

@@ -209,6 +209,8 @@ function fixedFeeBundle(): AgreementBundle {
       payment_reference_prefix: null,
       cyber_fraud_contact_phone: null,
       require_page_initials: true,
+      signing_provider: "native_lexflow",
+      require_email_otp_for_qr: false,
       created_at: now,
       updated_at: now,
     },

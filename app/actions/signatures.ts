@@ -2,10 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { requireFirm } from "@/lib/auth/session";
-import { isDropboxSignTestMode } from "@/lib/signatures/config";
+import {
+  firmSigningProvider,
+  isDropboxSignTestMode,
+  isSigningTestMode,
+} from "@/lib/signatures/config";
 import { getSignatureProvider } from "@/lib/signatures/provider";
 import { signingQrDataUrl } from "@/lib/signatures/qr";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
+import { resendNativeSigningLink, startNativeSigning } from "@/lib/signatures/native-workflow";
 import {
   cancelSignatureRequest,
   refreshEmbeddedSigningSession,
@@ -57,16 +62,42 @@ function readRequirePageInitials(formData: FormData, firmDefault: boolean) {
   );
 }
 
+function mapSigningMode(
+  provider: "native_lexflow" | "dropbox_sign",
+  mode: string,
+): SigningMode | null {
+  if (mode === "email") {
+    return "email";
+  }
+  if (provider === "native_lexflow") {
+    if (mode === "qr" || mode === "embedded_qr") {
+      return "qr";
+    }
+    if (mode === "same_device" || mode === "embedded_same_device") {
+      return "same_device";
+    }
+    return null;
+  }
+  if (mode === "qr" || mode === "embedded_qr") {
+    return "embedded_qr";
+  }
+  if (mode === "same_device" || mode === "embedded_same_device") {
+    return "embedded_same_device";
+  }
+  return null;
+}
+
 export async function startSigningAction(
   formData: FormData,
 ): Promise<SigningActionState> {
   try {
     const { firm, user } = await requireFirm();
     const agreementId = String(formData.get("agreementId") ?? "");
-    const signingMode = String(formData.get("signingMode") ?? "") as SigningMode;
+    const providerName = firmSigningProvider(firm.signing_provider);
+    const signingMode = mapSigningMode(providerName, String(formData.get("signingMode") ?? ""));
     const supabase = await createServerSupabaseClient();
     const store = createSupabaseSignatureStore(supabase);
-    const provider = getSignatureProvider();
+    const provider = getSignatureProvider(providerName);
     const shared = {
       store,
       provider,
@@ -74,7 +105,8 @@ export async function startSigningAction(
       agreementId,
       actorUserId: user.id,
       signer: readSigner(formData),
-      testMode: isDropboxSignTestMode(),
+      testMode:
+        providerName === "native_lexflow" ? isSigningTestMode() : isDropboxSignTestMode(),
       requirePageInitials: readRequirePageInitials(
         formData,
         firm.require_page_initials !== false,
@@ -82,19 +114,35 @@ export async function startSigningAction(
       replaceActive: true,
     };
 
+    if (!signingMode) {
+      return { error: "Choose how the client should sign." };
+    }
+
+    if (providerName === "native_lexflow") {
+      const result = await startNativeSigning({
+        ...shared,
+        provider: { name: "native_lexflow", cancelSignatureRequest: provider.cancelSignatureRequest },
+        firmName: firm.practice_name || firm.name,
+        signingMode: signingMode as "qr" | "email" | "same_device",
+        requireEmailOtpForQr: firm.require_email_otp_for_qr,
+      });
+      refreshAgreement(agreementId);
+      return {
+        ok: true,
+        signingUrl: result.signingUrl,
+        qrDataUrl: await signingQrDataUrl(result.signingUrl),
+      };
+    }
+
     if (signingMode === "email") {
       await sendForSignature(shared);
       refreshAgreement(agreementId);
       return { ok: true };
     }
 
-    if (signingMode !== "embedded_qr" && signingMode !== "embedded_same_device") {
-      return { error: "Choose how the client should sign." };
-    }
-
     const result = await startEmbeddedSigning({
       ...shared,
-      signingMode,
+      signingMode: signingMode as "embedded_qr" | "embedded_same_device",
     });
     refreshAgreement(agreementId);
     return {
@@ -121,8 +169,9 @@ export async function refreshSigningSessionAction(
   try {
     const { firm, user } = await requireFirm();
     const supabase = await createServerSupabaseClient();
+    const store = createSupabaseSignatureStore(supabase);
     const result = await refreshEmbeddedSigningSession({
-      store: createSupabaseSignatureStore(supabase),
+      store,
       firmId: firm.id,
       agreementId,
       actorUserId: user.id,
@@ -144,13 +193,24 @@ export async function resendSignatureRequestAction(
   try {
     const { firm, user } = await requireFirm();
     const supabase = await createServerSupabaseClient();
-    await resendSignatureRequest({
-      store: createSupabaseSignatureStore(supabase),
-      provider: getSignatureProvider(),
-      firmId: firm.id,
-      agreementId,
-      actorUserId: user.id,
-    });
+    const store = createSupabaseSignatureStore(supabase);
+    const providerName = firmSigningProvider(firm.signing_provider);
+    if (providerName === "native_lexflow") {
+      await resendNativeSigningLink({
+        store,
+        firmId: firm.id,
+        agreementId,
+        actorUserId: user.id,
+      });
+    } else {
+      await resendSignatureRequest({
+        store,
+        provider: getSignatureProvider(providerName),
+        firmId: firm.id,
+        agreementId,
+        actorUserId: user.id,
+      });
+    }
     refreshAgreement(agreementId);
     return { ok: true };
   } catch (error) {
@@ -166,7 +226,7 @@ export async function cancelSignatureRequestAction(
     const supabase = await createServerSupabaseClient();
     await cancelSignatureRequest({
       store: createSupabaseSignatureStore(supabase),
-      provider: getSignatureProvider(),
+      provider: getSignatureProvider(firmSigningProvider(firm.signing_provider)),
       firmId: firm.id,
       agreementId,
       actorUserId: user.id,
@@ -186,7 +246,7 @@ export async function retrySignedDocumentAction(
     const supabase = await createServerSupabaseClient();
     await retrySignedDocumentIngest({
       store: createSupabaseSignatureStore(supabase),
-      provider: getSignatureProvider(),
+      provider: getSignatureProvider(firmSigningProvider(firm.signing_provider)),
       firmId: firm.id,
       agreementId,
     });

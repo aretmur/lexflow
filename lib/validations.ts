@@ -54,6 +54,8 @@ export const updateFirmSchema = z.object({
 
 export const updateSigningSchema = z.object({
   requirePageInitials: z.enum(["true", "false"]),
+  requireEmailOtpForQr: z.enum(["true", "false"]).optional(),
+  signingProvider: z.enum(["native_lexflow", "dropbox_sign"]).optional(),
 });
 
 export const updatePaymentSchema = z.object({

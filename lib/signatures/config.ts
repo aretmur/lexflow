@@ -1,4 +1,4 @@
-import { SignatureProviderError } from "@/lib/signatures/types";
+import { SignatureProviderError, type SignatureProviderName } from "@/lib/signatures/types";
 
 export type DropboxSignConfig = {
   apiKey: string;
@@ -9,6 +9,27 @@ export type DropboxSignConfig = {
 
 export function isDropboxSignTestMode() {
   return process.env.DROPBOX_SIGN_TEST_MODE === "true";
+}
+
+export function isSigningTestMode() {
+  return process.env.SIGNING_TEST_MODE === "true";
+}
+
+export function getConfiguredSigningProviderName(): SignatureProviderName {
+  const value = process.env.SIGNING_PROVIDER?.trim();
+  if (value === "dropbox_sign") {
+    return "dropbox_sign";
+  }
+  return "native_lexflow";
+}
+
+export function firmSigningProvider(
+  firmProvider?: string | null,
+): SignatureProviderName {
+  if (firmProvider === "dropbox_sign" || firmProvider === "native_lexflow") {
+    return firmProvider;
+  }
+  return getConfiguredSigningProviderName();
 }
 
 export function getDropboxSignConfig(): DropboxSignConfig {

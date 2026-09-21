@@ -4,10 +4,12 @@ export const SIGNING_MODES = [
   "embedded_same_device",
   "embedded_qr",
   "email",
+  "qr",
+  "same_device",
 ] as const;
 export type { SigningMode };
 
-export const SIGNATURE_PROVIDERS = ["dropbox_sign"] as const;
+export const SIGNATURE_PROVIDERS = ["dropbox_sign", "native_lexflow"] as const;
 export type SignatureProviderName = (typeof SIGNATURE_PROVIDERS)[number];
 
 export const SIGNATURE_REQUEST_STATUSES = [
@@ -161,6 +163,23 @@ export type SignatureRequestRecord = {
   providerSignatureId: string | null;
   signingTokenHash: string | null;
   signingTokenExpiresAt: string | null;
+  emailVerifiedAt: string | null;
+  otpHash: string | null;
+  otpExpiresAt: string | null;
+  otpAttemptCount: number;
+  lastOtpSentAt: string | null;
+  initialledPageCount: number;
+  consentTextVersion: string | null;
+  consentedAt: string | null;
+  startedAt: string | null;
+  initiatedByUserId: string | null;
+  signerIp: string | null;
+  signerUserAgent: string | null;
+  generatedDocumentSha256: string | null;
+  signedDocumentSha256: string | null;
+  executionPage: number | null;
+  agreementPageCount: number | null;
+  firmDisplayName: string | null;
 };
 
 export type SignedAgreementDocumentRecord = {
@@ -186,6 +205,10 @@ export type SignatureSendContext = {
   packId: string;
   packStoragePath: string;
   packVersionNumber: number;
+  packSha256: string;
+  packPageCount: number;
+  agreementPageCount: number;
+  attachmentPageCount: number;
   activeRequest: SignatureRequestRecord | null;
 };
 

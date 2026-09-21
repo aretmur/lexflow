@@ -40,6 +40,8 @@ export type Firm = {
   payment_reference_prefix: string | null;
   cyber_fraud_contact_phone: string | null;
   require_page_initials: boolean;
+  signing_provider: SignatureProviderName;
+  require_email_otp_for_qr: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -266,6 +268,8 @@ export type GeneratedAgreementPack = {
   sha256: string;
   page_count: number;
   byte_size: number;
+  agreement_page_count: number;
+  attachment_page_count: number;
 };
 
 export type SignatureRequest = {
@@ -299,6 +303,23 @@ export type SignatureRequest = {
   provider_signature_id: string | null;
   signing_token_hash: string | null;
   signing_token_expires_at: string | null;
+  email_verified_at: string | null;
+  otp_hash: string | null;
+  otp_expires_at: string | null;
+  otp_attempt_count: number;
+  last_otp_sent_at: string | null;
+  initialled_page_count: number;
+  consent_text_version: string | null;
+  consented_at: string | null;
+  started_at: string | null;
+  initiated_by_user_id: string | null;
+  signer_ip: string | null;
+  signer_user_agent: string | null;
+  generated_document_sha256: string | null;
+  signed_document_sha256: string | null;
+  execution_page: number | null;
+  agreement_page_count: number | null;
+  firm_display_name: string | null;
 };
 
 export type SignatureWebhookEvent = {
@@ -323,6 +344,16 @@ export type SignedAgreementDocument = {
   page_count: number;
   byte_size: number;
   signed_at: string;
+  created_at: string;
+};
+
+export type SigningAuditRecord = {
+  id: string;
+  firm_id: string;
+  costs_agreement_id: string;
+  agreement_version_id: string;
+  signature_request_id: string;
+  payload: Record<string, unknown>;
   created_at: string;
 };
 
@@ -460,6 +491,23 @@ export type Database = {
           | "completed_at"
           | "cancelled_at"
           | "expired_at"
+          | "email_verified_at"
+          | "otp_hash"
+          | "otp_expires_at"
+          | "otp_attempt_count"
+          | "last_otp_sent_at"
+          | "initialled_page_count"
+          | "consent_text_version"
+          | "consented_at"
+          | "started_at"
+          | "initiated_by_user_id"
+          | "signer_ip"
+          | "signer_user_agent"
+          | "generated_document_sha256"
+          | "signed_document_sha256"
+          | "execution_page"
+          | "agreement_page_count"
+          | "firm_display_name"
         > & {
           id?: string;
           created_at?: string;
@@ -475,6 +523,23 @@ export type Database = {
           completed_at?: string | null;
           cancelled_at?: string | null;
           expired_at?: string | null;
+          email_verified_at?: string | null;
+          otp_hash?: string | null;
+          otp_expires_at?: string | null;
+          otp_attempt_count?: number;
+          last_otp_sent_at?: string | null;
+          initialled_page_count?: number;
+          consent_text_version?: string | null;
+          consented_at?: string | null;
+          started_at?: string | null;
+          initiated_by_user_id?: string | null;
+          signer_ip?: string | null;
+          signer_user_agent?: string | null;
+          generated_document_sha256?: string | null;
+          signed_document_sha256?: string | null;
+          execution_page?: number | null;
+          agreement_page_count?: number | null;
+          firm_display_name?: string | null;
         },
         Partial<SignatureRequest>
       >;
@@ -493,6 +558,14 @@ export type Database = {
           created_at?: string;
         },
         Partial<SignedAgreementDocument>
+      >;
+      signing_audit_records: Table<
+        SigningAuditRecord,
+        Omit<SigningAuditRecord, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        },
+        Partial<SigningAuditRecord>
       >;
       audit_events: Table<
         AuditEvent,

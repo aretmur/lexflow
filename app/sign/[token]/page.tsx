@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { getDropboxSignConfig } from "@/lib/signatures/config";
+import { resolveNativeSigningSession } from "@/lib/signatures/native-workflow";
 import { getSignatureProvider } from "@/lib/signatures/provider";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
 import { resolvePublicSigningSession } from "@/lib/signatures/workflow";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { NativeSigningRoom } from "@/app/sign/[token]/native-signing-room";
 import { SigningEmbed } from "@/app/sign/[token]/signing-embed";
 
 export const metadata: Metadata = {
@@ -18,16 +20,14 @@ export default async function PublicSignPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  let session;
+  let native;
   try {
-    session = await resolvePublicSigningSession({
+    native = await resolveNativeSigningSession({
       store: createSupabaseSignatureStore(createAdminSupabaseClient()),
-      provider: getSignatureProvider(),
       token,
-      clientId: getDropboxSignConfig().clientId,
     });
   } catch {
-    session = { status: "unavailable" as const };
+    native = { status: "unavailable" as const };
   }
 
   return (
@@ -39,23 +39,64 @@ export default async function PublicSignPage({
           </p>
           <h1 className="font-serif text-3xl">Review and sign your costs agreement</h1>
         </header>
-        {session.status === "ready" && session.testMode ? (
-          <div className="mb-6 border border-rule bg-paper-raised px-4 py-3 text-sm">
-            TEST SIGNATURE SESSION
-          </div>
-        ) : null}
-        {session.status === "ready" ? (
-          <SigningEmbed
-            signUrl={session.signUrl}
-            clientId={session.clientId}
-            testMode={session.testMode}
-          />
+        {native.status === "needs_otp" || native.status === "ready" ? (
+          <>
+            {native.testMode ? (
+              <div className="mb-6 border border-rule bg-paper-raised px-4 py-3 text-sm">
+                TEST SIGNATURE SESSION
+              </div>
+            ) : null}
+            <NativeSigningRoom token={token} session={native} />
+          </>
+        ) : native.status !== "invalid" ? (
+          <SigningMessage status={native.status} />
         ) : (
-          <SigningMessage status={session.status} />
+          <DropboxSigningSession token={token} />
         )}
       </div>
     </main>
   );
+}
+
+async function DropboxSigningSession({ token }: { token: string }) {
+  let session;
+  try {
+    session = await resolvePublicSigningSession({
+      store: createSupabaseSignatureStore(createAdminSupabaseClient()),
+      provider: getSignatureProvider("dropbox_sign"),
+      token,
+      clientId: getDropboxSignConfig().clientId,
+    });
+  } catch {
+    session = { status: "unavailable" as const };
+  }
+
+  if (session.status === "ready" && session.testMode) {
+    return (
+      <>
+        <div className="mb-6 border border-rule bg-paper-raised px-4 py-3 text-sm">
+          TEST SIGNATURE SESSION
+        </div>
+        <SigningEmbed
+          signUrl={session.signUrl}
+          clientId={session.clientId}
+          testMode={session.testMode}
+        />
+      </>
+    );
+  }
+
+  if (session.status === "ready") {
+    return (
+      <SigningEmbed
+        signUrl={session.signUrl}
+        clientId={session.clientId}
+        testMode={session.testMode}
+      />
+    );
+  }
+
+  return <SigningMessage status={session.status} />;
 }
 
 function SigningMessage({

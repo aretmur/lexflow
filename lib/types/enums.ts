@@ -82,7 +82,7 @@ export type FundingRequestStatus = (typeof FUNDING_REQUEST_STATUSES)[number];
 export const DESTINATION_TYPES = ["trust", "office", "other"] as const;
 export type DestinationType = (typeof DESTINATION_TYPES)[number];
 
-export const SIGNATURE_PROVIDERS = ["dropbox_sign"] as const;
+export const SIGNATURE_PROVIDERS = ["dropbox_sign", "native_lexflow"] as const;
 export type SignatureProviderName = (typeof SIGNATURE_PROVIDERS)[number];
 
 export const SIGNATURE_REQUEST_STATUSES = [
@@ -101,6 +101,8 @@ export const SIGNING_MODES = [
   "embedded_same_device",
   "embedded_qr",
   "email",
+  "qr",
+  "same_device",
 ] as const;
 export type SigningMode = (typeof SIGNING_MODES)[number];
 

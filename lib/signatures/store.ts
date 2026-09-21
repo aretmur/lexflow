@@ -37,6 +37,23 @@ export type InsertSignatureRequestInput = {
   providerSignatureId?: string | null;
   signingTokenHash?: string | null;
   signingTokenExpiresAt?: string | null;
+  emailVerifiedAt?: string | null;
+  otpHash?: string | null;
+  otpExpiresAt?: string | null;
+  otpAttemptCount?: number;
+  lastOtpSentAt?: string | null;
+  initialledPageCount?: number;
+  consentTextVersion?: string | null;
+  consentedAt?: string | null;
+  startedAt?: string | null;
+  initiatedByUserId?: string | null;
+  signerIp?: string | null;
+  signerUserAgent?: string | null;
+  generatedDocumentSha256?: string | null;
+  signedDocumentSha256?: string | null;
+  executionPage?: number | null;
+  agreementPageCount?: number | null;
+  firmDisplayName?: string | null;
 };
 
 export type UpdateSignatureRequestInput = Partial<
@@ -56,6 +73,19 @@ export type UpdateSignatureRequestInput = Partial<
     | "signingTokenExpiresAt"
     | "providerSignatureId"
     | "signingMode"
+    | "emailVerifiedAt"
+    | "otpHash"
+    | "otpExpiresAt"
+    | "otpAttemptCount"
+    | "lastOtpSentAt"
+    | "initialledPageCount"
+    | "consentTextVersion"
+    | "consentedAt"
+    | "startedAt"
+    | "signerIp"
+    | "signerUserAgent"
+    | "signedDocumentSha256"
+    | "generatedDocumentSha256"
   >
 >;
 
@@ -119,6 +149,13 @@ export interface SignatureStore {
   ): Promise<SignedAgreementDocumentRecord>;
   claimWebhookEvent(input: InsertWebhookEventInput): Promise<boolean>;
   insertAudit(input: SignatureAuditInput): Promise<void>;
+  insertSigningAudit(input: {
+    firmId: string;
+    costsAgreementId: string;
+    agreementVersionId: string;
+    signatureRequestId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void>;
 }
 
 export function createSupabaseSignatureStore(
@@ -151,7 +188,7 @@ export function createSupabaseSignatureStore(
 
       const { data: pack } = await supabase
         .from("generated_agreement_packs")
-        .select("id, storage_path, version_number")
+        .select("id, storage_path, version_number, sha256, page_count, agreement_page_count, attachment_page_count")
         .eq("firm_id", firmId)
         .eq("agreement_version_id", version.id)
         .maybeSingle();
@@ -178,6 +215,10 @@ export function createSupabaseSignatureStore(
         packId: pack.id,
         packStoragePath: pack.storage_path,
         packVersionNumber: pack.version_number,
+        packSha256: pack.sha256,
+        packPageCount: pack.page_count,
+        agreementPageCount: pack.agreement_page_count ?? pack.page_count,
+        attachmentPageCount: pack.attachment_page_count ?? 0,
         activeRequest: active ? fromRow(active) : null,
       };
     },
@@ -287,6 +328,20 @@ export function createSupabaseSignatureStore(
           provider_signature_id: input.providerSignatureId ?? null,
           signing_token_hash: input.signingTokenHash ?? null,
           signing_token_expires_at: input.signingTokenExpiresAt ?? null,
+          email_verified_at: input.emailVerifiedAt ?? null,
+          otp_hash: input.otpHash ?? null,
+          otp_expires_at: input.otpExpiresAt ?? null,
+          otp_attempt_count: input.otpAttemptCount ?? 0,
+          last_otp_sent_at: input.lastOtpSentAt ?? null,
+          initialled_page_count: input.initialledPageCount ?? 0,
+          consent_text_version: input.consentTextVersion ?? null,
+          consented_at: input.consentedAt ?? null,
+          started_at: input.startedAt ?? input.sentAt,
+          initiated_by_user_id: input.initiatedByUserId ?? input.createdBy,
+          generated_document_sha256: input.generatedDocumentSha256 ?? null,
+          execution_page: input.executionPage ?? null,
+          agreement_page_count: input.agreementPageCount ?? null,
+          firm_display_name: input.firmDisplayName ?? null,
         })
         .select("*")
         .single();
@@ -322,6 +377,27 @@ export function createSupabaseSignatureStore(
         update.provider_signature_id = patch.providerSignatureId;
       }
       if (patch.signingMode !== undefined) update.signing_mode = patch.signingMode;
+      if (patch.emailVerifiedAt !== undefined) update.email_verified_at = patch.emailVerifiedAt;
+      if (patch.otpHash !== undefined) update.otp_hash = patch.otpHash;
+      if (patch.otpExpiresAt !== undefined) update.otp_expires_at = patch.otpExpiresAt;
+      if (patch.otpAttemptCount !== undefined) update.otp_attempt_count = patch.otpAttemptCount;
+      if (patch.lastOtpSentAt !== undefined) update.last_otp_sent_at = patch.lastOtpSentAt;
+      if (patch.initialledPageCount !== undefined) {
+        update.initialled_page_count = patch.initialledPageCount;
+      }
+      if (patch.consentTextVersion !== undefined) {
+        update.consent_text_version = patch.consentTextVersion;
+      }
+      if (patch.consentedAt !== undefined) update.consented_at = patch.consentedAt;
+      if (patch.startedAt !== undefined) update.started_at = patch.startedAt;
+      if (patch.signerIp !== undefined) update.signer_ip = patch.signerIp;
+      if (patch.signerUserAgent !== undefined) update.signer_user_agent = patch.signerUserAgent;
+      if (patch.signedDocumentSha256 !== undefined) {
+        update.signed_document_sha256 = patch.signedDocumentSha256;
+      }
+      if (patch.generatedDocumentSha256 !== undefined) {
+        update.generated_document_sha256 = patch.generatedDocumentSha256;
+      }
 
       const { data, error } = await supabase
         .from("signature_requests")
@@ -419,6 +495,18 @@ export function createSupabaseSignatureStore(
         throw new SignatureWorkflowError(error.message);
       }
     },
+    async insertSigningAudit(input) {
+      const { error } = await supabase.from("signing_audit_records").insert({
+        firm_id: input.firmId,
+        costs_agreement_id: input.costsAgreementId,
+        agreement_version_id: input.agreementVersionId,
+        signature_request_id: input.signatureRequestId,
+        payload: input.payload,
+      });
+      if (error && !/duplicate|unique|immutable/i.test(error.message)) {
+        throw new SignatureWorkflowError(error.message);
+      }
+    },
   };
 }
 
@@ -457,6 +545,23 @@ function fromRow(row: SignatureRequestRow): SignatureRequestRecord {
     providerSignatureId: row.provider_signature_id ?? null,
     signingTokenHash: row.signing_token_hash ?? null,
     signingTokenExpiresAt: row.signing_token_expires_at ?? null,
+    emailVerifiedAt: row.email_verified_at ?? null,
+    otpHash: row.otp_hash ?? null,
+    otpExpiresAt: row.otp_expires_at ?? null,
+    otpAttemptCount: row.otp_attempt_count ?? 0,
+    lastOtpSentAt: row.last_otp_sent_at ?? null,
+    initialledPageCount: row.initialled_page_count ?? 0,
+    consentTextVersion: row.consent_text_version ?? null,
+    consentedAt: row.consented_at ?? null,
+    startedAt: row.started_at ?? null,
+    initiatedByUserId: row.initiated_by_user_id ?? row.created_by,
+    signerIp: row.signer_ip ?? null,
+    signerUserAgent: row.signer_user_agent ?? null,
+    generatedDocumentSha256: row.generated_document_sha256 ?? null,
+    signedDocumentSha256: row.signed_document_sha256 ?? null,
+    executionPage: row.execution_page ?? null,
+    agreementPageCount: row.agreement_page_count ?? null,
+    firmDisplayName: row.firm_display_name ?? null,
   };
 }
 

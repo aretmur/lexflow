@@ -16,7 +16,11 @@ import {
   loadLatestSignatureRequest,
   loadSignedAgreementDocument,
 } from "@/lib/signatures/load";
-import { isDropboxSignTestMode } from "@/lib/signatures/config";
+import {
+  firmSigningProvider,
+  isDropboxSignTestMode,
+  isSigningTestMode,
+} from "@/lib/signatures/config";
 import { PageHeader } from "@/components/layout/page-header";
 import { AgreementReview } from "@/components/agreements/agreement-review";
 import type { AgreementSnapshot } from "@/lib/agreements/snapshot";
@@ -70,7 +74,11 @@ export default async function AgreementReviewPage({
               }
             : null
         }
-        testMode={isDropboxSignTestMode()}
+        testMode={
+          firmSigningProvider(firm.signing_provider) === "native_lexflow"
+            ? isSigningTestMode()
+            : isDropboxSignTestMode()
+        }
         signatureRequest={
           signatureRequest
             ? {

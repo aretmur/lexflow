@@ -23,7 +23,11 @@ export default async function SigningSettingsPage() {
         client initials on every page of the final pack, including the appended
         information sheet.
       </Notice>
-      <SigningForm requirePageInitials={firm.require_page_initials !== false} />
+      <SigningForm
+        requirePageInitials={firm.require_page_initials !== false}
+        requireEmailOtpForQr={Boolean(firm.require_email_otp_for_qr)}
+        signingProvider={firm.signing_provider ?? "native_lexflow"}
+      />
     </div>
   );
 }

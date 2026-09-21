@@ -130,6 +130,8 @@ export async function generateAgreementAction(agreementId: string) {
       sha256: pack.sha256,
       page_count: pack.pageCount,
       byte_size: pack.bytes.byteLength,
+      agreement_page_count: pack.agreementPageCount,
+      attachment_page_count: pack.attachmentPageCount,
     });
 
     if (insertError) {
