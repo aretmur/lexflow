@@ -77,6 +77,7 @@ export default async function AgreementReviewPage({
                 signerName: signatureRequest.signerName,
                 signerEmail: signatureRequest.signerEmail,
                 status: signatureRequest.status,
+                signingMode: signatureRequest.signingMode ?? "email",
                 sentAt: signatureRequest.sentAt,
                 viewedAt: signatureRequest.viewedAt,
                 signedAt: signatureRequest.signedAt,
@@ -105,10 +106,10 @@ export default async function AgreementReviewPage({
 
 function headerDescription(status: string) {
   if (status === "generated") {
-    return "Generated pack is frozen. Confirm the client details and send for signature.";
+    return "READY TO SIGN. Confirm the client details and start signing.";
   }
   if (status === "sent" || status === "viewed") {
-    return "Awaiting the client to sign from the secure signing link.";
+    return "Signing in progress. The lawyer screen updates when the client signs.";
   }
   if (status === "signed") {
     return "This costs agreement has been signed. The original generated pack remains available.";

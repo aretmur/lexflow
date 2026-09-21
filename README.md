@@ -64,8 +64,9 @@ Run these SQL files in order against the Supabase project (SQL editor or `supaba
 4. `supabase/migrations/20260921100000_create_agreement_draft.sql`
 5. `supabase/migrations/20260921120000_signature_requests.sql`
 6. `supabase/migrations/20260921130000_page_initials.sql`
+7. `supabase/migrations/20260921140000_embedded_signing.sql`
 
-The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store. The third adds immutable generated agreement packs and the private `generated-agreements` storage bucket. The fourth adds `create_agreement_draft`, which creates a placeholder client, matter, agreement and pricing row in one transaction. The fifth adds signature requests, webhook event idempotency, immutable signed documents, and the private `signed-agreements` storage bucket. The sixth adds the firm default and per-request audit fields for requiring client initials on every page of the final pack.
+The first migration creates firm-scoped tables, integer-cent money columns, row-level security, and `create_firm`. The second adds agreement types, stages, pricing, snapshots, payment details, and the required-attachment store. The third adds immutable generated agreement packs and the private `generated-agreements` storage bucket. The fourth adds `create_agreement_draft`, which creates a placeholder client, matter, agreement and pricing row in one transaction. The fifth adds signature requests, webhook event idempotency, immutable signed documents, and the private `signed-agreements` storage bucket. The sixth adds the firm default and per-request audit fields for requiring client initials on every page of the final pack. The seventh adds embedded signing modes, the provider signer id, and hashed short-lived signing-session tokens.
 
 ### 5. Auth settings
 
@@ -99,8 +100,10 @@ npm run build
 3. `NEXT_PUBLIC_SITE_URL` must be the production origin, for example `https://www.lexflow.com.au`.
 4. Leave `DROPBOX_SIGN_TEST_MODE` unset in production.
 5. Add the production `/auth/callback` URL in Supabase Auth redirect URLs.
-6. In Dropbox Sign, point the app callback URL to `https://www.lexflow.com.au/api/webhooks/dropbox-sign`.
+6. In Dropbox Sign, create an API app, set `DROPBOX_SIGN_CLIENT_ID`, add the production domain for embedded signing, and point the app callback URL to `https://www.lexflow.com.au/api/webhooks/dropbox-sign`.
 7. Deploy.
+
+Embedded Sign Now uses `/signature_request/create_embedded` and mints a temporary `/embedded/sign_url/{signature_id}` only when the client opens `/sign/{token}`. Do not treat that URL as a permanent credential. Email signing remains available as a fallback and still uses `/signature_request/send`.
 
 The Next.js app uses the App Router and `proxy.ts` for session refresh. No extra Vercel configuration is required.
 

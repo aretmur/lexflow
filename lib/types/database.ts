@@ -12,6 +12,7 @@ import type {
   PricingType,
   SignatureProviderName,
   SignatureRequestStatus,
+  SigningMode,
   TemplateStatus,
 } from "@/lib/types/enums";
 
@@ -294,6 +295,10 @@ export type SignatureRequest = {
   require_page_initials: boolean;
   initials_field_count: number;
   page_count: number;
+  signing_mode: SigningMode;
+  provider_signature_id: string | null;
+  signing_token_hash: string | null;
+  signing_token_expires_at: string | null;
 };
 
 export type SignatureWebhookEvent = {

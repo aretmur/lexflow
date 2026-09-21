@@ -97,6 +97,13 @@ export const SIGNATURE_REQUEST_STATUSES = [
 ] as const;
 export type SignatureRequestStatus = (typeof SIGNATURE_REQUEST_STATUSES)[number];
 
+export const SIGNING_MODES = [
+  "embedded_same_device",
+  "embedded_qr",
+  "email",
+] as const;
+export type SigningMode = (typeof SIGNING_MODES)[number];
+
 export const TEMPLATE_STATUSES = [
   "draft",
   "under_legal_review",

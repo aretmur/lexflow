@@ -4,22 +4,26 @@ import { revalidatePath } from "next/cache";
 import { requireFirm } from "@/lib/auth/session";
 import { isDropboxSignTestMode } from "@/lib/signatures/config";
 import { getSignatureProvider } from "@/lib/signatures/provider";
+import { signingQrDataUrl } from "@/lib/signatures/qr";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
 import {
   cancelSignatureRequest,
+  refreshEmbeddedSigningSession,
   resendSignatureRequest,
   retrySignedDocumentIngest,
   sendForSignature,
+  startEmbeddedSigning,
 } from "@/lib/signatures/workflow";
 import {
   SignatureProviderError,
   SignatureWorkflowError,
+  type SigningMode,
 } from "@/lib/signatures/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isNextNavigationError, publicActionError } from "@/lib/server-log";
-import type { FormActionState } from "@/lib/validations";
+import type { FormActionState, SigningActionState } from "@/lib/validations";
 
-function actionError(error: unknown, fallback: string): FormActionState {
+function actionError(error: unknown, fallback: string): SigningActionState {
   if (isNextNavigationError(error)) {
     throw error;
   }
@@ -36,35 +40,101 @@ function refreshAgreement(agreementId: string) {
   revalidatePath("/agreements");
 }
 
+function readSigner(formData: FormData) {
+  return {
+    name: String(formData.get("signerName") ?? ""),
+    email: String(formData.get("signerEmail") ?? ""),
+  };
+}
+
+function readRequirePageInitials(formData: FormData, firmDefault: boolean) {
+  if (formData.get("requirePageInitials") == null) {
+    return firmDefault;
+  }
+  return (
+    formData.get("requirePageInitials") === "true" ||
+    formData.get("requirePageInitials") === "on"
+  );
+}
+
+export async function startSigningAction(
+  formData: FormData,
+): Promise<SigningActionState> {
+  try {
+    const { firm, user } = await requireFirm();
+    const agreementId = String(formData.get("agreementId") ?? "");
+    const signingMode = String(formData.get("signingMode") ?? "") as SigningMode;
+    const supabase = await createServerSupabaseClient();
+    const store = createSupabaseSignatureStore(supabase);
+    const provider = getSignatureProvider();
+    const shared = {
+      store,
+      provider,
+      firmId: firm.id,
+      agreementId,
+      actorUserId: user.id,
+      signer: readSigner(formData),
+      testMode: isDropboxSignTestMode(),
+      requirePageInitials: readRequirePageInitials(
+        formData,
+        firm.require_page_initials !== false,
+      ),
+      replaceActive: true,
+    };
+
+    if (signingMode === "email") {
+      await sendForSignature(shared);
+      refreshAgreement(agreementId);
+      return { ok: true };
+    }
+
+    if (signingMode !== "embedded_qr" && signingMode !== "embedded_same_device") {
+      return { error: "Choose how the client should sign." };
+    }
+
+    const result = await startEmbeddedSigning({
+      ...shared,
+      signingMode,
+    });
+    refreshAgreement(agreementId);
+    return {
+      ok: true,
+      signingUrl: result.signingUrl,
+      qrDataUrl: await signingQrDataUrl(result.signingUrl),
+    };
+  } catch (error) {
+    return actionError(error, "Unable to start the signing session.");
+  }
+}
+
 export async function sendForSignatureAction(
   _previous: FormActionState,
   formData: FormData,
 ): Promise<FormActionState> {
+  formData.set("signingMode", "email");
+  return startSigningAction(formData);
+}
+
+export async function refreshSigningSessionAction(
+  agreementId: string,
+): Promise<SigningActionState> {
   try {
     const { firm, user } = await requireFirm();
-    const agreementId = String(formData.get("agreementId") ?? "");
     const supabase = await createServerSupabaseClient();
-    await sendForSignature({
+    const result = await refreshEmbeddedSigningSession({
       store: createSupabaseSignatureStore(supabase),
-      provider: getSignatureProvider(),
       firmId: firm.id,
       agreementId,
       actorUserId: user.id,
-      signer: {
-        name: String(formData.get("signerName") ?? ""),
-        email: String(formData.get("signerEmail") ?? ""),
-      },
-      testMode: isDropboxSignTestMode(),
-      requirePageInitials:
-        formData.get("requirePageInitials") == null
-          ? firm.require_page_initials !== false
-          : formData.get("requirePageInitials") === "true" ||
-            formData.get("requirePageInitials") === "on",
     });
     refreshAgreement(agreementId);
-    return { ok: true };
+    return {
+      ok: true,
+      signingUrl: result.signingUrl,
+      qrDataUrl: await signingQrDataUrl(result.signingUrl),
+    };
   } catch (error) {
-    return actionError(error, "Unable to send the agreement for signature.");
+    return actionError(error, "Unable to reopen the signing session.");
   }
 }
 

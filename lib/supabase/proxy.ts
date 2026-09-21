@@ -9,7 +9,11 @@ function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.has(pathname)) {
     return true;
   }
-  return pathname.startsWith("/auth/") || pathname.startsWith("/api/webhooks/");
+  return (
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/sign/")
+  );
 }
 
 export async function updateSession(request: NextRequest) {

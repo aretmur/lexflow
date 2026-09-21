@@ -213,3 +213,57 @@ describe("Dropbox Sign send request", () => {
     ).rejects.toBeInstanceOf(SignatureProviderError);
   });
 });
+
+describe("Dropbox Sign embedded signing", () => {
+  it("creates an embedded request and captures the signer signature_id", async () => {
+    const calls: Request[] = [];
+    const sign = provider(async (input, init) => {
+      const request = new Request(input, init);
+      calls.push(request);
+      return Response.json({
+        signature_request: {
+          signature_request_id: "sr-embedded",
+          signatures: [{ signature_id: "sig-client-1" }],
+        },
+      });
+    });
+
+    const result = await sign.createEmbeddedSignatureRequest({
+      title: "Costs agreement",
+      subject: SIGNING_EMAIL_SUBJECT,
+      fileName: "agreement-pack-v1.pdf",
+      fileBytes: new Uint8Array([1, 2, 3]),
+      signer: { name: "John Smith", email: "john@example.com" },
+      metadata: {},
+      signingRedirectUrl: "https://www.lexflow.com.au/signing-complete",
+      testMode: true,
+    });
+
+    expect(result.providerRequestId).toBe("sr-embedded");
+    expect(result.providerSignatureId).toBe("sig-client-1");
+    expect(calls[0].url).toContain("/signature_request/create_embedded");
+    const form = await calls[0].formData();
+    expect(form.get("client_id")).toBe("client-1");
+    expect(form.get("use_text_tags")).toBe("1");
+  });
+
+  it("obtains a temporary sign_url from the signer signature_id", async () => {
+    const calls: Request[] = [];
+    const sign = provider(async (input, init) => {
+      const request = new Request(input, init);
+      calls.push(request);
+      return Response.json({
+        embedded: {
+          sign_url: "https://app.hellosign.com/editor/embeddedSign?token=temp",
+          expires_at: 1695273600,
+        },
+      });
+    });
+
+    const result = await sign.getEmbeddedSignUrl("sig-client-1");
+    expect(calls[0].url).toContain("/embedded/sign_url/sig-client-1");
+    expect(calls[0].url).not.toContain("sr-embedded");
+    expect(result.signUrl).toContain("embeddedSign");
+    expect(result.expiresAt).toBe(new Date(1695273600 * 1000).toISOString());
+  });
+});

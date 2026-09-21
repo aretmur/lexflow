@@ -195,6 +195,11 @@ export type FormActionState = {
   fieldErrors?: Record<string, string[] | undefined>;
 };
 
+export type SigningActionState = FormActionState & {
+  signingUrl?: string;
+  qrDataUrl?: string;
+};
+
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid input";
 }

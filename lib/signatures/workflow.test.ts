@@ -1,11 +1,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
+import { hashSigningToken } from "@/lib/signatures/signing-token";
 import type { SignatureStore } from "@/lib/signatures/store";
 import {
   cancelSignatureRequest,
   handleProviderEvent,
+  refreshEmbeddedSigningSession,
+  resolvePublicSigningSession,
   sendForSignature,
+  startEmbeddedSigning,
 } from "@/lib/signatures/workflow";
 import {
   SignatureProviderError,
@@ -120,6 +124,11 @@ function memoryStore(initial?: {
         null
       );
     },
+    async loadRequestByTokenHash(tokenHash) {
+      return (
+        state.requests.find((request) => request.signingTokenHash === tokenHash) ?? null
+      );
+    },
     async loadLatestRequest(firmId, agreementId) {
       return (
         [...state.requests]
@@ -182,6 +191,10 @@ function memoryStore(initial?: {
         requirePageInitials: input.requirePageInitials,
         initialsFieldCount: input.initialsFieldCount,
         pageCount: input.pageCount,
+        signingMode: input.signingMode,
+        providerSignatureId: input.providerSignatureId ?? null,
+        signingTokenHash: input.signingTokenHash ?? null,
+        signingTokenExpiresAt: input.signingTokenExpiresAt ?? null,
       };
       state.requests.push(record);
       return record;
@@ -230,28 +243,54 @@ function memoryStore(initial?: {
 
 function mockProvider(overrides: Partial<SignatureProvider> = {}): SignatureProvider & {
   created: number;
+  embeddedCreated: number;
   cancelled: number;
   downloads: number;
+  signUrlCalls: number;
   lastCreate: CreateSignatureRequestInput | null;
+  lastSignUrlId: string | null;
 } {
   const state = {
     created: 0,
+    embeddedCreated: 0,
     cancelled: 0,
     downloads: 0,
+    signUrlCalls: 0,
     lastCreate: null as CreateSignatureRequestInput | null,
+    lastSignUrlId: null as string | null,
   };
   return {
     name: "dropbox_sign",
     created: 0,
+    embeddedCreated: 0,
     cancelled: 0,
     downloads: 0,
+    signUrlCalls: 0,
     lastCreate: null,
+    lastSignUrlId: null,
     async createSignatureRequest(input) {
       state.created += 1;
       state.lastCreate = input;
       this.created = state.created;
       this.lastCreate = input;
       return { providerRequestId: "sr-1" };
+    },
+    async createEmbeddedSignatureRequest(input) {
+      state.embeddedCreated += 1;
+      state.lastCreate = input;
+      this.embeddedCreated = state.embeddedCreated;
+      this.lastCreate = input;
+      return { providerRequestId: "sr-embedded", providerSignatureId: "sig-1" };
+    },
+    async getEmbeddedSignUrl(providerSignatureId) {
+      state.signUrlCalls += 1;
+      state.lastSignUrlId = providerSignatureId;
+      this.signUrlCalls = state.signUrlCalls;
+      this.lastSignUrlId = providerSignatureId;
+      return {
+        signUrl: `https://app.hellosign.com/editor/embeddedSign?signature_id=${providerSignatureId}&token=temp`,
+        expiresAt: "2026-09-21T01:00:00.000Z",
+      };
     },
     async getSignatureRequest(providerRequestId) {
       return {
@@ -306,6 +345,7 @@ describe("send signature request", () => {
     expect(request.status).toBe("sent");
     expect(store.agreementStatus).toBe("sent");
     expect(store.audits).toContain("signature_request_sent");
+    expect(request.signingMode).toBe("email");
     expect(request.requirePageInitials).toBe(true);
     expect(request.pageCount).toBe(1);
     expect(request.initialsFieldCount).toBe(1);
@@ -593,5 +633,182 @@ describe("status transitions", () => {
     ).rejects.toThrow(/boom/);
     expect(statuses).toEqual([]);
     expect(store.agreementStatus).toBe("generated");
+  });
+});
+
+describe("embedded signing sessions", () => {
+  it("creates an embedded request, stores the signature_id, and keeps the sign_url temporary", async () => {
+    const store = memoryStore();
+    const provider = mockProvider();
+    const result = await startEmbeddedSigning({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      signingMode: "embedded_qr",
+      now: new Date("2026-09-21T00:00:00.000Z"),
+    });
+
+    expect(provider.embeddedCreated).toBe(1);
+    expect(result.request.providerRequestId).toBe("sr-embedded");
+    expect(result.request.providerSignatureId).toBe("sig-1");
+    expect(result.request.signingMode).toBe("embedded_qr");
+    expect(result.request.signingTokenHash).toBe(hashSigningToken(result.token));
+    expect(result.request.signingTokenHash).not.toBe(result.token);
+    expect(JSON.stringify(result.request)).not.toContain(result.signingUrl);
+    expect(provider.signUrlCalls).toBe(0);
+    expect(result.request.initialsFieldCount).toBe(1);
+    expect(provider.lastCreate?.formFieldsPerDocument?.[0]).toHaveLength(1);
+  });
+
+  it("opens a same-device session and later mints a fresh sign_url", async () => {
+    const store = memoryStore();
+    const provider = mockProvider();
+    const started = await startEmbeddedSigning({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      signingMode: "embedded_same_device",
+    });
+
+    const session = await resolvePublicSigningSession({
+      store,
+      provider,
+      token: started.token,
+      clientId: "client-1",
+    });
+
+    expect(started.request.signingMode).toBe("embedded_same_device");
+    expect(session.status).toBe("ready");
+    if (session.status === "ready") {
+      expect(session.signUrl).toContain("sig-1");
+      expect(session.clientId).toBe("client-1");
+    }
+    expect(provider.lastSignUrlId).toBe("sig-1");
+    expect(store.requests[0].status).toBe("viewed");
+  });
+
+  it("rejects an expired token and a token from another request", async () => {
+    const store = memoryStore();
+    const provider = mockProvider();
+    const started = await startEmbeddedSigning({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      signingMode: "embedded_qr",
+      now: new Date("2026-09-21T00:00:00.000Z"),
+    });
+
+    await expect(
+      resolvePublicSigningSession({
+        store,
+        provider,
+        token: started.token,
+        clientId: "client-1",
+        now: new Date("2026-09-21T03:00:00.000Z"),
+      }),
+    ).resolves.toEqual({ status: "expired" });
+
+    await expect(
+      resolvePublicSigningSession({
+        store,
+        provider,
+        token: "guessed-token",
+        clientId: "client-1",
+      }),
+    ).resolves.toEqual({ status: "invalid" });
+
+    const otherFirm = memoryStore({ firmId: OTHER_FIRM });
+    await expect(
+      resolvePublicSigningSession({
+        store: otherFirm,
+        provider,
+        token: started.token,
+        clientId: "client-1",
+      }),
+    ).resolves.toEqual({ status: "invalid" });
+  });
+
+  it("rotates the Lexflow token without creating another provider request", async () => {
+    const store = memoryStore();
+    const provider = mockProvider();
+    const first = await startEmbeddedSigning({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      signingMode: "embedded_qr",
+    });
+    const refreshed = await refreshEmbeddedSigningSession({
+      store,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+    });
+
+    expect(provider.embeddedCreated).toBe(1);
+    expect(refreshed.token).not.toBe(first.token);
+    expect(
+      await resolvePublicSigningSession({
+        store,
+        provider,
+        token: first.token,
+        clientId: "client-1",
+      }),
+    ).toEqual({ status: "invalid" });
+    expect(
+      (await resolvePublicSigningSession({
+        store,
+        provider,
+        token: refreshed.token,
+        clientId: "client-1",
+      })).status,
+    ).toBe("ready");
+  });
+
+  it("cancels a QR session before creating an email request", async () => {
+    const store = memoryStore();
+    const provider = mockProvider();
+    await startEmbeddedSigning({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      signingMode: "embedded_qr",
+    });
+    await sendForSignature({
+      store,
+      provider,
+      firmId: FIRM,
+      agreementId: AGREEMENT,
+      actorUserId: USER,
+      signer: { name: "John Smith", email: "john@example.com" },
+      testMode: true,
+      replaceActive: true,
+    });
+
+    expect(provider.cancelled).toBe(1);
+    expect(provider.created).toBe(1);
+    expect(store.requests[0].status).toBe("cancelled");
+    expect(store.requests[0].signingTokenHash).toBeNull();
+    expect(store.requests[1].signingMode).toBe("email");
+    expect(store.agreementStatus).toBe("sent");
   });
 });

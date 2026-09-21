@@ -1,3 +1,12 @@
+import type { SigningMode } from "@/lib/types/enums";
+
+export const SIGNING_MODES = [
+  "embedded_same_device",
+  "embedded_qr",
+  "email",
+] as const;
+export type { SigningMode };
+
 export const SIGNATURE_PROVIDERS = ["dropbox_sign"] as const;
 export type SignatureProviderName = (typeof SIGNATURE_PROVIDERS)[number];
 
@@ -67,6 +76,17 @@ export type CreateSignatureRequestInput = {
 
 export type CreateSignatureRequestResult = {
   providerRequestId: string;
+  providerSignatureId?: string;
+};
+
+export type CreateEmbeddedSignatureRequestResult = {
+  providerRequestId: string;
+  providerSignatureId: string;
+};
+
+export type EmbeddedSignUrl = {
+  signUrl: string;
+  expiresAt: string;
 };
 
 export type SignatureRequestDetails = {
@@ -98,6 +118,10 @@ export interface SignatureProvider {
   createSignatureRequest(
     input: CreateSignatureRequestInput,
   ): Promise<CreateSignatureRequestResult>;
+  createEmbeddedSignatureRequest(
+    input: CreateSignatureRequestInput,
+  ): Promise<CreateEmbeddedSignatureRequestResult>;
+  getEmbeddedSignUrl(providerSignatureId: string): Promise<EmbeddedSignUrl>;
   getSignatureRequest(providerRequestId: string): Promise<SignatureRequestDetails>;
   cancelSignatureRequest(providerRequestId: string): Promise<void>;
   remindSignatureRequest(providerRequestId: string, email: string): Promise<void>;
@@ -133,6 +157,10 @@ export type SignatureRequestRecord = {
   requirePageInitials: boolean;
   initialsFieldCount: number;
   pageCount: number;
+  signingMode: SigningMode;
+  providerSignatureId: string | null;
+  signingTokenHash: string | null;
+  signingTokenExpiresAt: string | null;
 };
 
 export type SignedAgreementDocumentRecord = {

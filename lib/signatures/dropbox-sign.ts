@@ -1,8 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   SignatureProviderError,
+  type CreateEmbeddedSignatureRequestResult,
   type CreateSignatureRequestInput,
   type CreateSignatureRequestResult,
+  type EmbeddedSignUrl,
   type ProviderWebhookEvent,
   type SignatureProvider,
   type SignatureRequestDetails,
@@ -38,9 +40,17 @@ type DropboxSignatureRequestBody = {
     is_complete?: boolean;
     is_declined?: boolean;
     signatures?: Array<{
+      signature_id?: string;
       signer_email_address?: string;
       status_code?: string;
     }>;
+  };
+};
+
+type DropboxEmbeddedSignUrlBody = {
+  embedded?: {
+    sign_url?: string;
+    expires_at?: number | string;
   };
 };
 
@@ -66,48 +76,46 @@ export class DropboxSignProvider implements SignatureProvider {
   async createSignatureRequest(
     input: CreateSignatureRequestInput,
   ): Promise<CreateSignatureRequestResult> {
-    const form = new FormData();
-    form.set("title", input.title);
-    form.set("subject", input.subject);
-    if (input.message) {
-      form.set("message", input.message);
-    }
-    form.set("signers[0][name]", input.signer.name);
-    form.set("signers[0][email_address]", input.signer.email);
-    form.set("signers[0][order]", "0");
-    form.set("use_text_tags", "1");
-    form.set("hide_text_tags", "0");
-    form.set("test_mode", input.testMode ? "1" : "0");
-    form.set("signing_redirect_url", input.signingRedirectUrl);
-    if (input.clientId || this.config.clientId) {
-      form.set("client_id", input.clientId ?? this.config.clientId ?? "");
-    }
-    for (const [key, value] of Object.entries(input.metadata)) {
-      form.set(`metadata[${key}]`, value);
-    }
-    form.set(
-      "file[0]",
-      new Blob([Uint8Array.from(input.fileBytes)], { type: "application/pdf" }),
-      input.fileName,
-    );
-    if (input.formFieldsPerDocument?.length) {
-      form.set(
-        "form_fields_per_document",
-        JSON.stringify(input.formFieldsPerDocument),
-      );
-    }
-
     const body = await this.requestJson<DropboxSignatureRequestBody>(
       "/signature_request/send",
-      { method: "POST", body: form },
+      { method: "POST", body: this.buildRequestForm(input, false) },
     );
-    const providerRequestId = body.signature_request?.signature_request_id;
-    if (!providerRequestId) {
+    return this.readCreatedRequest(body, false);
+  }
+
+  async createEmbeddedSignatureRequest(
+    input: CreateSignatureRequestInput,
+  ): Promise<CreateEmbeddedSignatureRequestResult> {
+    const body = await this.requestJson<DropboxSignatureRequestBody>(
+      "/signature_request/create_embedded",
+      { method: "POST", body: this.buildRequestForm(input, true) },
+    );
+    const created = this.readCreatedRequest(body, true);
+    if (!created.providerSignatureId) {
       throw new SignatureProviderError(
-        "Dropbox Sign did not return a signature request id.",
+        "Dropbox Sign did not return a signer signature id.",
       );
     }
-    return { providerRequestId };
+    return {
+      providerRequestId: created.providerRequestId,
+      providerSignatureId: created.providerSignatureId,
+    };
+  }
+
+  async getEmbeddedSignUrl(providerSignatureId: string): Promise<EmbeddedSignUrl> {
+    const body = await this.requestJson<DropboxEmbeddedSignUrlBody>(
+      `/embedded/sign_url/${encodeURIComponent(providerSignatureId)}`,
+    );
+    const signUrl = body.embedded?.sign_url?.trim();
+    if (!signUrl) {
+      throw new SignatureProviderError(
+        "Dropbox Sign did not return an embedded signing URL.",
+      );
+    }
+    return {
+      signUrl,
+      expiresAt: toIso(String(body.embedded?.expires_at ?? "")),
+    };
   }
 
   async getSignatureRequest(
@@ -168,6 +176,62 @@ export class DropboxSignProvider implements SignatureProvider {
       return false;
     }
     return timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+  }
+
+  private buildRequestForm(input: CreateSignatureRequestInput, embedded: boolean) {
+    const form = new FormData();
+    form.set("title", input.title);
+    form.set("subject", input.subject);
+    if (input.message) {
+      form.set("message", input.message);
+    }
+    form.set("signers[0][name]", input.signer.name);
+    form.set("signers[0][email_address]", input.signer.email);
+    form.set("signers[0][order]", "0");
+    form.set("use_text_tags", "1");
+    form.set("hide_text_tags", "0");
+    form.set("test_mode", input.testMode ? "1" : "0");
+    form.set("signing_redirect_url", input.signingRedirectUrl);
+    const clientId = input.clientId ?? this.config.clientId;
+    if (embedded && !clientId) {
+      throw new SignatureProviderError(
+        "Dropbox Sign client id is required for embedded signing.",
+      );
+    }
+    if (clientId) {
+      form.set("client_id", clientId);
+    }
+    for (const [key, value] of Object.entries(input.metadata)) {
+      form.set(`metadata[${key}]`, value);
+    }
+    form.set(
+      "file[0]",
+      new Blob([Uint8Array.from(input.fileBytes)], { type: "application/pdf" }),
+      input.fileName,
+    );
+    if (input.formFieldsPerDocument?.length) {
+      form.set("form_fields_per_document", JSON.stringify(input.formFieldsPerDocument));
+    }
+    return form;
+  }
+
+  private readCreatedRequest(
+    body: DropboxSignatureRequestBody,
+    requireSignatureId: boolean,
+  ): CreateSignatureRequestResult {
+    const providerRequestId = body.signature_request?.signature_request_id;
+    if (!providerRequestId) {
+      throw new SignatureProviderError(
+        "Dropbox Sign did not return a signature request id.",
+      );
+    }
+    const providerSignatureId = body.signature_request?.signatures?.[0]?.signature_id;
+    if (requireSignatureId && !providerSignatureId) {
+      throw new SignatureProviderError(
+        "Dropbox Sign did not return a signer signature id.",
+      );
+    }
+    return { providerRequestId, providerSignatureId };
   }
 
   parseWebhook(payload: unknown): ProviderWebhookEvent {

@@ -33,6 +33,10 @@ export type InsertSignatureRequestInput = {
   requirePageInitials: boolean;
   initialsFieldCount: number;
   pageCount: number;
+  signingMode: SignatureRequestRecord["signingMode"];
+  providerSignatureId?: string | null;
+  signingTokenHash?: string | null;
+  signingTokenExpiresAt?: string | null;
 };
 
 export type UpdateSignatureRequestInput = Partial<
@@ -48,6 +52,10 @@ export type UpdateSignatureRequestInput = Partial<
     | "completedAt"
     | "cancelledAt"
     | "expiredAt"
+    | "signingTokenHash"
+    | "signingTokenExpiresAt"
+    | "providerSignatureId"
+    | "signingMode"
   >
 >;
 
@@ -80,6 +88,7 @@ export interface SignatureStore {
     firmId: string,
     agreementId: string,
   ): Promise<SignatureRequestRecord | null>;
+  loadRequestByTokenHash(tokenHash: string): Promise<SignatureRequestRecord | null>;
   loadSignedDocument(
     firmId: string,
     agreementId: string,
@@ -192,6 +201,15 @@ export function createSupabaseSignatureStore(
       return data ? fromRow(data) : null;
     },
 
+    async loadRequestByTokenHash(tokenHash) {
+      const { data } = await supabase
+        .from("signature_requests")
+        .select("*")
+        .eq("signing_token_hash", tokenHash)
+        .maybeSingle();
+      return data ? fromRow(data) : null;
+    },
+
     async loadLatestRequest(firmId, agreementId) {
       const { data } = await supabase
         .from("signature_requests")
@@ -265,6 +283,10 @@ export function createSupabaseSignatureStore(
           require_page_initials: input.requirePageInitials,
           initials_field_count: input.initialsFieldCount,
           page_count: input.pageCount,
+          signing_mode: input.signingMode,
+          provider_signature_id: input.providerSignatureId ?? null,
+          signing_token_hash: input.signingTokenHash ?? null,
+          signing_token_expires_at: input.signingTokenExpiresAt ?? null,
         })
         .select("*")
         .single();
@@ -290,6 +312,16 @@ export function createSupabaseSignatureStore(
       if (patch.completedAt !== undefined) update.completed_at = patch.completedAt;
       if (patch.cancelledAt !== undefined) update.cancelled_at = patch.cancelledAt;
       if (patch.expiredAt !== undefined) update.expired_at = patch.expiredAt;
+      if (patch.signingTokenHash !== undefined) {
+        update.signing_token_hash = patch.signingTokenHash;
+      }
+      if (patch.signingTokenExpiresAt !== undefined) {
+        update.signing_token_expires_at = patch.signingTokenExpiresAt;
+      }
+      if (patch.providerSignatureId !== undefined) {
+        update.provider_signature_id = patch.providerSignatureId;
+      }
+      if (patch.signingMode !== undefined) update.signing_mode = patch.signingMode;
 
       const { data, error } = await supabase
         .from("signature_requests")
@@ -421,6 +453,10 @@ function fromRow(row: SignatureRequestRow): SignatureRequestRecord {
     requirePageInitials: row.require_page_initials !== false,
     initialsFieldCount: row.initials_field_count ?? 0,
     pageCount: row.page_count ?? 0,
+    signingMode: row.signing_mode ?? "email",
+    providerSignatureId: row.provider_signature_id ?? null,
+    signingTokenHash: row.signing_token_hash ?? null,
+    signingTokenExpiresAt: row.signing_token_expires_at ?? null,
   };
 }
 

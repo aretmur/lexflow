@@ -8,6 +8,13 @@ import {
   pageGeometriesFromPdf,
 } from "@/lib/signatures/form-fields";
 import {
+  createSigningToken,
+  hashSigningToken,
+  isSigningTokenExpired,
+  publicSigningUrl,
+  signingTokenExpiresAt,
+} from "@/lib/signatures/signing-token";
+import {
   SIGNING_EMAIL_SUBJECT,
   signingRedirectUrl,
 } from "@/lib/signatures/text-tags";
@@ -19,6 +26,7 @@ import {
   type SignatureProvider,
   type SignatureRequestRecord,
   type SignatureSigner,
+  type SigningMode,
   type SignedAgreementDocumentRecord,
 } from "@/lib/signatures/types";
 
@@ -31,6 +39,26 @@ export type SendSignatureResult = {
   request: SignatureRequestRecord;
 };
 
+export type EmbeddedSigningResult = {
+  request: SignatureRequestRecord;
+  signingUrl: string;
+  token: string;
+};
+
+export type PublicSigningSession =
+  | { status: "invalid" }
+  | { status: "expired" }
+  | { status: "unavailable" }
+  | { status: "completed"; signerName: string }
+  | {
+      status: "ready";
+      signUrl: string;
+      signUrlExpiresAt: string;
+      clientId: string;
+      testMode: boolean;
+      signerName: string;
+    };
+
 export async function sendForSignature(input: {
   store: SignatureStore;
   provider: SignatureProvider;
@@ -40,19 +68,12 @@ export async function sendForSignature(input: {
   signer: SignatureSigner;
   testMode: boolean;
   requirePageInitials?: boolean;
+  replaceActive?: boolean;
   now?: Date;
 }): Promise<SendSignatureResult> {
   const signer = parseSigner(input.signer);
-  const context = await input.store.loadSendContext(input.firmId, input.agreementId);
-  if (!context || context.firmId !== input.firmId) {
-    throw new SignatureWorkflowError("Agreement not found.");
-  }
-  if (context.agreementStatus !== "generated") {
-    throw new SignatureWorkflowError(
-      "Only a generated agreement can be sent for signature.",
-    );
-  }
-  if (context.activeRequest) {
+  const context = await prepareSendContext(input, "email");
+  if (context.activeRequest?.signingMode === "email") {
     throw new SignatureWorkflowError(
       "A signature request is already outstanding for this agreement.",
     );
@@ -121,6 +142,7 @@ export async function sendForSignature(input: {
       requirePageInitials,
       initialsFieldCount,
       pageCount,
+      signingMode: "email",
     });
     await input.store.updateAgreementStatus(context.firmId, context.agreementId, "sent", [
       "generated",
@@ -153,10 +175,234 @@ export async function sendForSignature(input: {
       requirePageInitials,
       initialsFieldCount,
       pageCount,
+      signingMode: "email",
     },
   });
 
   return { request };
+}
+
+export async function startEmbeddedSigning(input: {
+  store: SignatureStore;
+  provider: SignatureProvider;
+  firmId: string;
+  agreementId: string;
+  actorUserId: string;
+  signer: SignatureSigner;
+  testMode: boolean;
+  signingMode: Extract<SigningMode, "embedded_qr" | "embedded_same_device">;
+  requirePageInitials?: boolean;
+  replaceActive?: boolean;
+  now?: Date;
+}): Promise<EmbeddedSigningResult> {
+  const signer = parseSigner(input.signer);
+  const context = await prepareSendContext(input, input.signingMode);
+  if (
+    context.activeRequest &&
+    (context.activeRequest.signingMode === "embedded_qr" ||
+      context.activeRequest.signingMode === "embedded_same_device")
+  ) {
+    return rotateSigningToken({
+      store: input.store,
+      request: context.activeRequest,
+      actorUserId: input.actorUserId,
+      now: input.now,
+    });
+  }
+
+  const pack = await loadPackFields(input.store, context, input.requirePageInitials);
+
+  let created: { providerRequestId: string; providerSignatureId: string };
+  try {
+    created = await input.provider.createEmbeddedSignatureRequest({
+      title: "Costs agreement",
+      subject: SIGNING_EMAIL_SUBJECT,
+      fileName: `agreement-pack-v${context.packVersionNumber}.pdf`,
+      fileBytes: pack.packBytes,
+      signer,
+      metadata: {
+        lexflow_firm_id: context.firmId,
+        lexflow_agreement_id: context.agreementId,
+        lexflow_agreement_version_id: context.versionId,
+        lexflow_generated_pack_id: context.packId,
+      },
+      signingRedirectUrl: signingRedirectUrl(),
+      testMode: input.testMode,
+      formFieldsPerDocument: pack.formFields,
+    });
+  } catch (error) {
+    logServerError("embedded_signature_request_create_failed", {
+      agreementId: input.agreementId,
+      firmId: input.firmId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    throw new SignatureWorkflowError(
+      publicActionError(
+        error instanceof Error ? error.message : undefined,
+        "Unable to start the signing session.",
+      ),
+    );
+  }
+
+  const issued = issueSigningToken(input.now);
+  const sentAt = (input.now ?? new Date()).toISOString();
+  let request: SignatureRequestRecord;
+  try {
+    request = await input.store.insertRequest({
+      firmId: context.firmId,
+      costsAgreementId: context.agreementId,
+      agreementVersionId: context.versionId,
+      generatedPackId: context.packId,
+      provider: input.provider.name,
+      providerRequestId: created.providerRequestId,
+      signerName: signer.name,
+      signerEmail: signer.email,
+      status: "sent",
+      testMode: input.testMode,
+      sentAt,
+      createdBy: input.actorUserId,
+      requirePageInitials: pack.requirePageInitials,
+      initialsFieldCount: pack.initialsFieldCount,
+      pageCount: pack.pageCount,
+      signingMode: input.signingMode,
+      providerSignatureId: created.providerSignatureId,
+      signingTokenHash: issued.hash,
+      signingTokenExpiresAt: issued.expiresAt,
+    });
+    await input.store.updateAgreementStatus(context.firmId, context.agreementId, "sent", [
+      "generated",
+    ]);
+  } catch (error) {
+    await input.provider.cancelSignatureRequest(created.providerRequestId).catch((cancelError) => {
+      logServerError("signature_request_orphan_cancel_failed", {
+        providerRequestId: created.providerRequestId,
+        message: cancelError instanceof Error ? cancelError.message : "unknown",
+      });
+    });
+    throw error;
+  }
+
+  await input.store.insertAudit({
+    firmId: context.firmId,
+    actorUserId: input.actorUserId,
+    entityType: "costs_agreement",
+    entityId: context.agreementId,
+    action: "signature_request_sent",
+    payload: {
+      signatureRequestId: request.id,
+      providerRequestId: created.providerRequestId,
+      providerSignatureId: created.providerSignatureId,
+      provider: input.provider.name,
+      agreementVersionId: context.versionId,
+      signerName: signer.name,
+      signerEmail: signer.email,
+      sentAt,
+      testMode: input.testMode,
+      requirePageInitials: pack.requirePageInitials,
+      initialsFieldCount: pack.initialsFieldCount,
+      pageCount: pack.pageCount,
+      signingMode: input.signingMode,
+    },
+  });
+
+  return {
+    request,
+    token: issued.token,
+    signingUrl: publicSigningUrl(issued.token),
+  };
+}
+
+export async function refreshEmbeddedSigningSession(input: {
+  store: SignatureStore;
+  firmId: string;
+  agreementId: string;
+  actorUserId: string;
+  now?: Date;
+}): Promise<EmbeddedSigningResult> {
+  const context = await input.store.loadSendContext(input.firmId, input.agreementId);
+  const request = context?.activeRequest;
+  if (!context || context.firmId !== input.firmId || !request) {
+    throw new SignatureWorkflowError("There is no outstanding signing session.");
+  }
+  if (request.signingMode === "email") {
+    throw new SignatureWorkflowError("This signature request was sent by email.");
+  }
+  return rotateSigningToken({
+    store: input.store,
+    request,
+    actorUserId: input.actorUserId,
+    now: input.now,
+  });
+}
+
+export async function resolvePublicSigningSession(input: {
+  store: SignatureStore;
+  provider: SignatureProvider;
+  token: string;
+  clientId?: string;
+  now?: Date;
+}): Promise<PublicSigningSession> {
+  const token = input.token.trim();
+  if (!token) {
+    return { status: "invalid" };
+  }
+
+  const request = await input.store.loadRequestByTokenHash(hashSigningToken(token));
+  if (!request) {
+    return { status: "invalid" };
+  }
+  if (["signed"].includes(request.status) || request.signedAt) {
+    return { status: "completed", signerName: request.signerName };
+  }
+  if (["cancelled", "declined", "expired", "failed"].includes(request.status)) {
+    return { status: "unavailable" };
+  }
+  if (isSigningTokenExpired(request.signingTokenExpiresAt, input.now)) {
+    return { status: "expired" };
+  }
+  if (!request.providerSignatureId) {
+    return { status: "unavailable" };
+  }
+
+  const clientId = input.clientId?.trim();
+  if (!clientId) {
+    throw new SignatureWorkflowError("Embedded signing is not configured.");
+  }
+
+  let embedded: { signUrl: string; expiresAt: string };
+  try {
+    embedded = await input.provider.getEmbeddedSignUrl(request.providerSignatureId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/already signed|complete|409/i.test(message)) {
+      return { status: "completed", signerName: request.signerName };
+    }
+    throw new SignatureWorkflowError(
+      publicActionError(message || undefined, "Unable to open the signing session."),
+    );
+  }
+
+  if (!request.viewedAt) {
+    await input.store.updateRequest(request.id, {
+      status: request.status === "signed" ? "signed" : "viewed",
+      viewedAt: (input.now ?? new Date()).toISOString(),
+    });
+    await input.store.updateAgreementStatus(
+      request.firmId,
+      request.costsAgreementId,
+      "viewed",
+      ["sent", "viewed"],
+    );
+  }
+
+  return {
+    status: "ready",
+    signUrl: embedded.signUrl,
+    signUrlExpiresAt: embedded.expiresAt,
+    clientId,
+    testMode: request.testMode,
+    signerName: request.signerName,
+  };
 }
 
 export async function resendSignatureRequest(input: {
@@ -173,6 +419,9 @@ export async function resendSignatureRequest(input: {
   }
   if (!["sent", "viewed"].includes(request.status)) {
     throw new SignatureWorkflowError("This signature request cannot be resent.");
+  }
+  if (request.signingMode !== "email") {
+    throw new SignatureWorkflowError("Only emailed signing links can be resent.");
   }
 
   try {
@@ -233,6 +482,8 @@ export async function cancelSignatureRequest(input: {
     status: "cancelled",
     cancelledAt,
     lastError: null,
+    signingTokenHash: null,
+    signingTokenExpiresAt: null,
   });
   await input.store.updateAgreementStatus(request.firmId, request.costsAgreementId, "generated", [
     "sent",
@@ -561,4 +812,114 @@ function parseSigner(signer: SignatureSigner): SignatureSigner {
     throw new SignatureWorkflowError(parsed.error.issues[0]?.message ?? "Invalid signer details.");
   }
   return parsed.data;
+}
+
+async function prepareSendContext(
+  input: {
+    store: SignatureStore;
+    provider: SignatureProvider;
+    firmId: string;
+    agreementId: string;
+    actorUserId: string;
+    replaceActive?: boolean;
+    now?: Date;
+  },
+  desiredMode: SigningMode,
+) {
+  let context = await input.store.loadSendContext(input.firmId, input.agreementId);
+  if (!context || context.firmId !== input.firmId) {
+    throw new SignatureWorkflowError("Agreement not found.");
+  }
+
+  const active = context.activeRequest;
+  if (active && active.signingMode !== desiredMode) {
+    if (!input.replaceActive) {
+      throw new SignatureWorkflowError(
+        "A signature request is already outstanding for this agreement.",
+      );
+    }
+    await cancelSignatureRequest({
+      store: input.store,
+      provider: input.provider,
+      firmId: input.firmId,
+      agreementId: input.agreementId,
+      actorUserId: input.actorUserId,
+      now: input.now,
+    });
+    context = await input.store.loadSendContext(input.firmId, input.agreementId);
+    if (!context || context.firmId !== input.firmId) {
+      throw new SignatureWorkflowError("Agreement not found.");
+    }
+  }
+
+  if (!context.activeRequest && context.agreementStatus !== "generated") {
+    throw new SignatureWorkflowError(
+      "Only a generated agreement can be sent for signature.",
+    );
+  }
+
+  return context;
+}
+
+async function loadPackFields(
+  store: SignatureStore,
+  context: { packStoragePath: string },
+  requirePageInitialsInput?: boolean,
+) {
+  const packBytes = await store.downloadGeneratedPack(context.packStoragePath);
+  if (!packBytes) {
+    throw new SignatureWorkflowError("The generated agreement pack could not be retrieved.");
+  }
+  const requirePageInitials = requirePageInitialsInput !== false;
+  const pages = await pageGeometriesFromPdf(packBytes);
+  const formFields = formFieldsPerDocument(pages, requirePageInitials);
+  return {
+    packBytes,
+    requirePageInitials,
+    pageCount: pages.length,
+    formFields,
+    initialsFieldCount: formFields?.[0]?.length ?? 0,
+  };
+}
+
+function issueSigningToken(now?: Date) {
+  const issued = createSigningToken();
+  return {
+    token: issued.token,
+    hash: issued.hash,
+    expiresAt: signingTokenExpiresAt(now),
+  };
+}
+
+async function rotateSigningToken(input: {
+  store: SignatureStore;
+  request: SignatureRequestRecord;
+  actorUserId: string;
+  now?: Date;
+}): Promise<EmbeddedSigningResult> {
+  if (!["sent", "viewed"].includes(input.request.status)) {
+    throw new SignatureWorkflowError("This signing session cannot be reopened.");
+  }
+  const issued = issueSigningToken(input.now);
+  const request = await input.store.updateRequest(input.request.id, {
+    signingTokenHash: issued.hash,
+    signingTokenExpiresAt: issued.expiresAt,
+    lastError: null,
+  });
+  await input.store.insertAudit({
+    firmId: request.firmId,
+    actorUserId: input.actorUserId,
+    entityType: "costs_agreement",
+    entityId: request.costsAgreementId,
+    action: "signing_session_reopened",
+    payload: {
+      signatureRequestId: request.id,
+      signingMode: request.signingMode,
+    },
+  });
+  return {
+    request,
+    token: issued.token,
+    signingUrl: publicSigningUrl(issued.token),
+  };
 }
