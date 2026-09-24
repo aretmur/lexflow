@@ -3,7 +3,6 @@ import type { DocumentModel } from "@/lib/documents/document-types";
 import { displayOrDash, formatMoney } from "@/lib/documents/formatters";
 import {
   DocumentHeader,
-  ExecutionBlock,
   Labeled,
   NumberedList,
   PageFooter,
@@ -22,7 +21,6 @@ import {
   DISCLOSURE_INTRO,
   SHORT_FORM_FIXED_FEE_BASIS_OF_COSTS,
   SHORT_FORM_HOURLY_BASIS_OF_COSTS,
-  SHORT_FORM_EXECUTION,
   SHORT_FORM_INTRO,
   SHORT_FORM_RIGHTS,
 } from "@/lib/documents/templates/vic/wording";
@@ -148,7 +146,6 @@ export function VicShortFormDocument({ model }: { model: DocumentModel }) {
         <Text style={styles.heading}>Your rights</Text>
         <Paragraphs lines={SHORT_FORM_RIGHTS} />
 
-        <ExecutionBlock wording={SHORT_FORM_EXECUTION} />
         <PageFooter model={model} />
       </Page>
     </Document>

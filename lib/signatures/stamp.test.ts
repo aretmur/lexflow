@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { inflateSync } from "node:zlib";
 import { PDFDocument } from "pdf-lib";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
+import { overlayExecutionFrame } from "@/lib/signatures/execution-layout";
 import { stampExecutedPdf } from "@/lib/signatures/stamp";
 import { SignatureWorkflowError } from "@/lib/signatures/types";
 
@@ -139,5 +140,34 @@ describe("executed PDF stamping", () => {
         signerCapacity: "Client",
       }),
     ).rejects.toBeInstanceOf(SignatureWorkflowError);
+  });
+
+  it("fills the same execution lines that were drawn on the generated pack", async () => {
+    const document = await PDFDocument.create();
+    document.addPage([595.28, 841.89]);
+    const framed = await overlayExecutionFrame(
+      new Uint8Array(await document.save()),
+      "By signing below you acknowledge that you have received this costs agreement.",
+    );
+    const stamped = await stampExecutedPdf({
+      packBytes: framed,
+      expectedSha256: sha256Hex(framed),
+      requirePageInitials: false,
+      agreementPageCount: 1,
+      initials: { kind: "type", text: "AM" },
+      initialledPages: [],
+      signature: { kind: "type", text: "Aret Muradyan" },
+      signerName: "Aret Muradyan",
+      signedDate: "25 September 2026",
+      signerCapacity: "Client",
+    });
+    const text = pdfText(stamped.bytes);
+    expect(text).toContain("Signature:");
+    expect(text).toContain("Name:");
+    expect(text).toContain("Capacity:");
+    expect(text).toContain("Date:");
+    expect(text).toContain("Aret Muradyan");
+    expect(text).toContain("Client");
+    expect(text).toContain("25 September 2026");
   });
 });

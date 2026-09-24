@@ -112,6 +112,13 @@ export const FULL_STAGED_SECTIONS: Array<{ heading: string; body: string[] }> = 
 export const FULL_STAGED_EXECUTION =
   "By signing below you acknowledge that you have received this costs agreement and the attached information sheet, and that you agree to the terms of this costs agreement. These signature lines are placeholders only. Electronic signing is not effected by this document.";
 
+export function executionWordingForTemplate(templateKey: string) {
+  if (templateKey === "vic_full_staged") {
+    return FULL_STAGED_EXECUTION;
+  }
+  return SHORT_FORM_EXECUTION;
+}
+
 export const DISCLOSURE_HEADING =
   "Disclosure of costs — Legal Profession Uniform Law s 174(5)";
 

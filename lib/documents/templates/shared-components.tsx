@@ -3,7 +3,6 @@ import type { DocumentModel } from "@/lib/documents/document-types";
 import { displayOrDash, joinAddress } from "@/lib/documents/formatters";
 import { PRIVATE_AND_CONFIDENTIAL } from "@/lib/documents/templates/vic/wording";
 import { EXECUTION_LAYOUT } from "@/lib/signatures/execution-layout";
-import { DROPBOX_SIGN_TEXT_TAGS } from "@/lib/signatures/text-tags";
 
 export const colors = {
   ink: "#1c1917",
@@ -136,12 +135,6 @@ export const styles = StyleSheet.create({
   signatureField: {
     marginTop: 8,
   },
-  hiddenTag: {
-    color: "#FFFFFF",
-    fontFamily: "Helvetica",
-    fontSize: 6,
-    lineHeight: 1,
-  },
   footer: {
     position: "absolute",
     left: 54,
@@ -272,58 +265,6 @@ export function TotalsRow({
     <View style={styles.totalsRow} wrap={false}>
       <Text style={strong ? styles.totalStrong : undefined}>{label}</Text>
       <Text style={strong ? styles.totalStrong : undefined}>{value}</Text>
-    </View>
-  );
-}
-
-export function ExecutionBlock({ wording }: { wording: string }) {
-  return (
-    <View wrap={false} style={{ marginTop: 18 }}>
-      <Text style={styles.heading}>Execution</Text>
-      <Text style={styles.paragraph}>{wording}</Text>
-      <ExecutionLine
-        label="Signature:"
-        tag={DROPBOX_SIGN_TEXT_TAGS.signature}
-        height={EXECUTION_LAYOUT.signature.height}
-      />
-      <ExecutionLine label="Name:" tag={DROPBOX_SIGN_TEXT_TAGS.name} height={20} />
-      <ExecutionLine label="Capacity:" height={20} />
-      <ExecutionLine label="Date:" tag={DROPBOX_SIGN_TEXT_TAGS.date} height={20} />
-    </View>
-  );
-}
-
-function ExecutionLine({
-  label,
-  tag,
-  height,
-}: {
-  label: string;
-  tag?: string;
-  height: number;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-end",
-        height,
-        marginTop: 2,
-      }}
-      wrap={false}
-    >
-      <Text style={{ width: EXECUTION_LAYOUT.labelWidth, fontFamily: "Helvetica", fontSize: 10 }}>
-        {label}
-      </Text>
-      <View
-        style={{
-          flex: 1,
-          borderBottomWidth: 0.7,
-          borderBottomColor: colors.rule,
-          height: height - 4,
-        }}
-      />
-      {tag ? <Text style={styles.hiddenTag}>{tag}</Text> : null}
     </View>
   );
 }

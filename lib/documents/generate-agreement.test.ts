@@ -238,6 +238,7 @@ describe("short form generation", () => {
     expect(text.includes("Hourly rate")).toBe(true);
     expect(text.includes("Estimated professional fees excluding GST")).toBe(true);
     expect(text.includes("Fixed professional fee")).toBe(false);
+    expect(text.includes("Execution")).toBe(true);
     expect(text.includes("Signature:")).toBe(true);
     expect(text.includes("Name:")).toBe(true);
     expect(text.includes("Capacity:")).toBe(true);

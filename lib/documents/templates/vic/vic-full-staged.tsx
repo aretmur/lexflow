@@ -3,7 +3,6 @@ import type { DocumentModel } from "@/lib/documents/document-types";
 import { displayOrDash, formatMoney } from "@/lib/documents/formatters";
 import {
   DocumentHeader,
-  ExecutionBlock,
   Labeled,
   NumberedList,
   PageFooter,
@@ -20,7 +19,6 @@ import {
 import {
   FULL_STAGED_AGREEMENT_INTRO,
   FULL_STAGED_COVER_INTRO,
-  FULL_STAGED_EXECUTION,
   FULL_STAGED_SECTIONS,
 } from "@/lib/documents/templates/vic/wording";
 
@@ -215,7 +213,6 @@ export function VicFullStagedDocument({ model }: { model: DocumentModel }) {
           </View>
         ))}
 
-        <ExecutionBlock wording={FULL_STAGED_EXECUTION} />
         <PageFooter model={model} />
       </Page>
     </Document>
