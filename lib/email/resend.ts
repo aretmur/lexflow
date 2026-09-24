@@ -16,6 +16,7 @@ export type ResendClient = {
       subject: string;
       text: string;
       replyTo?: string;
+      attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
     }) => Promise<{ data?: { id?: string | null } | null; error?: { message?: string } | null }>;
   };
 };
@@ -51,6 +52,15 @@ export class ResendEmailProvider implements EmailProvider {
         subject: message.subject,
         text: message.text,
         ...(replyTo ? { replyTo } : {}),
+        ...(message.attachments?.length
+          ? {
+              attachments: message.attachments.map((item) => ({
+                filename: item.filename,
+                content: Buffer.from(item.bytes),
+                contentType: item.contentType,
+              })),
+            }
+          : {}),
       });
       if (error || !data?.id) {
         logServerError("email_send_failed", {

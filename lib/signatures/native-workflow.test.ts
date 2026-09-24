@@ -65,18 +65,20 @@ async function completeInput(
   token: string,
   extras: Partial<Parameters<typeof completeNativeSigning>[0]> = {},
 ) {
-  return completeNativeSigning({
+  const result = await completeNativeSigning({
     store,
     token,
     consentAccepted: true,
     signerName: "John Smith",
     signedDate: "21 September 2026",
+    signerCapacity: "Client",
     signature: { kind: "type", text: "John Smith" },
     initials: { kind: "type", text: "JS" },
     initialledPages: [1],
     now,
     ...extras,
   });
+  return result.signed;
 }
 
 describe("native Lexflow signing", () => {
@@ -94,9 +96,9 @@ describe("native Lexflow signing", () => {
     }
   });
 
-  it("stores a hashed token and never emails a QR session", async () => {
+  it("stores a hashed token and never emails a QR session until the signed copies go out", async () => {
     const store = createStore();
-    const email = new MustNotSendEmailProvider();
+    const email = new RecordingEmailProvider();
     setEmailProviderForTests(email);
     const started = await startNativeSigning(startInput(store));
 
@@ -107,10 +109,17 @@ describe("native Lexflow signing", () => {
     expect(JSON.stringify(store.requests[0])).not.toContain(started.token);
     expect(started.request.emailVerifiedAt).toBeTruthy();
     expect(started.request.initiatedByUserId).toBe(USER);
-    expect(email.calls).toBe(0);
+    expect(email.sent).toHaveLength(0);
     await completeInput(store, started.token);
     expect(store.requests[0].status).toBe("signed");
-    expect(email.calls).toBe(0);
+    expect(email.sent).toHaveLength(2);
+    expect(email.sent.map((item) => item.to).sort()).toEqual([
+      "intake@example.com",
+      "john@example.com",
+    ]);
+    expect(email.sent.every((item) => item.attachments?.[0]?.filename === "Signed Costs Agreement.pdf")).toBe(
+      true,
+    );
   });
 
   it("emails a signing link and requires OTP before the pack can be reviewed", async () => {
@@ -145,14 +154,15 @@ describe("native Lexflow signing", () => {
 
   it("records same-device initiation without email OTP by default", async () => {
     const store = createStore();
-    const email = new MustNotSendEmailProvider();
+    const email = new RecordingEmailProvider();
     setEmailProviderForTests(email);
     const started = await startNativeSigning(startInput(store, { signingMode: "same_device" }));
     const session = await resolveNativeSigningSession({ store, token: started.token, now });
     expect(session.status).toBe("ready");
-    expect(email.calls).toBe(0);
+    expect(email.sent).toHaveLength(0);
     await completeInput(store, started.token);
     expect(store.requests[0].status).toBe("signed");
+    expect(email.sent).toHaveLength(2);
   });
 
   it("can require email OTP for QR sessions", async () => {
@@ -191,6 +201,7 @@ describe("native Lexflow signing", () => {
     expect(second.id).toBe(first.id);
     expect(store.documents).toHaveLength(1);
     expect(store.uploads).toHaveLength(1);
+    expect(store.deliveries.filter((row) => row.status === "sent")).toHaveLength(2);
   });
 
   it("invalidates the token after cancel", async () => {
@@ -341,6 +352,17 @@ describe("native Lexflow signing", () => {
     expect(store.requests[0].lastError).toBeNull();
   });
 
+  it("keeps the agreement signed when signed-copy email fails", async () => {
+    const store = createStore();
+    const started = await startNativeSigning(startInput(store));
+    setEmailProviderForTests(new FailingEmailProvider());
+    await completeInput(store, started.token);
+    expect(store.requests[0].status).toBe("signed");
+    expect(store.agreementStatus).toBe("signed");
+    expect(store.documents).toHaveLength(1);
+    expect(store.deliveries.every((row) => row.status === "failed")).toBe(true);
+  });
+
   it("does not send through another firm's mailbox", async () => {
     const store = createStore();
     process.env.MICROSOFT_GRAPH_SENDER = "intake@octagonlegal.au";
@@ -358,15 +380,6 @@ describe("native Lexflow signing", () => {
     expect(store.requests[0].emailSentAt).toBeNull();
   });
 });
-
-class MustNotSendEmailProvider implements EmailProvider {
-  readonly name = "must-not-send";
-  calls = 0;
-  async send(): Promise<EmailSendResult> {
-    this.calls += 1;
-    throw new Error("email provider should not be used");
-  }
-}
 
 class FailingEmailProvider implements EmailProvider {
   readonly name = "fail";

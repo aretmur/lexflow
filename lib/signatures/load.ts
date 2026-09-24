@@ -3,6 +3,7 @@ import { createSupabaseSignatureStore } from "@/lib/signatures/store";
 import type {
   SignatureRequestRecord,
   SignedAgreementDocumentRecord,
+  SignedDocumentDeliveryRecord,
 } from "@/lib/signatures/types";
 
 export async function loadLatestSignatureRequest(
@@ -19,4 +20,12 @@ export async function loadSignedAgreementDocument(
 ): Promise<SignedAgreementDocumentRecord | null> {
   const supabase = await createServerSupabaseClient();
   return createSupabaseSignatureStore(supabase).loadSignedDocument(firmId, agreementId);
+}
+
+export async function loadSignedDocumentDeliveries(
+  firmId: string,
+  signedDocumentId: string,
+): Promise<SignedDocumentDeliveryRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  return createSupabaseSignatureStore(supabase).listDeliveries(firmId, signedDocumentId);
 }

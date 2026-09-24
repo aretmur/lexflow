@@ -96,7 +96,8 @@ export async function loadDashboard(firmId: string): Promise<DashboardData> {
     supabase
       .from("costs_agreements")
       .select("id, matter_id, status, updated_at")
-      .eq("firm_id", firmId),
+      .eq("firm_id", firmId)
+      .is("discarded_at", null),
     supabase.from("clients").select("id, display_name").eq("firm_id", firmId),
   ]);
 

@@ -14,3 +14,19 @@ export function firmSigningEmailIdentity(firm: {
     replyTo: firm.signing_reply_to_email?.trim() || null,
   };
 }
+
+export function firmSignedCopyRecipient(firm: {
+  signing_reply_to_email?: string | null;
+  signing_sender_email?: string | null;
+}) {
+  return firm.signing_reply_to_email?.trim() || firm.signing_sender_email?.trim() || null;
+}
+
+export function maskEmail(email: string) {
+  const trimmed = email.trim();
+  const at = trimmed.indexOf("@");
+  if (at < 1) {
+    return "***";
+  }
+  return `${trimmed.slice(0, 1)}***${trimmed.slice(at)}`;
+}

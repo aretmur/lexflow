@@ -12,7 +12,7 @@ import {
   EmailProviderError,
 } from "@/lib/email/errors";
 import { createMsalTokenProvider, type GraphTokenProvider } from "@/lib/email/graph-auth";
-import type { EmailMessage, EmailProvider, EmailSendResult } from "@/lib/email/types";
+import type { EmailAttachment, EmailMessage, EmailProvider, EmailSendResult } from "@/lib/email/types";
 import { logServerError } from "@/lib/server-log";
 
 const GRAPH_SEND_MAIL = "https://graph.microsoft.com/v1.0/users";
@@ -104,6 +104,9 @@ export class MicrosoftGraphEmailProvider implements EmailProvider {
                 },
               },
             ],
+            ...(graphFileAttachments(message.attachments)
+              ? { attachments: graphFileAttachments(message.attachments) }
+              : {}),
           },
           saveToSentItems: true,
         }),
@@ -132,6 +135,18 @@ export class MicrosoftGraphEmailProvider implements EmailProvider {
     });
     throw new EmailProviderError(EMAIL_SEND_FAILED);
   }
+}
+
+function graphFileAttachments(attachments: EmailAttachment[] | undefined) {
+  if (!attachments?.length) {
+    return null;
+  }
+  return attachments.map((item) => ({
+    "@odata.type": "#microsoft.graph.fileAttachment",
+    name: item.filename,
+    contentType: item.contentType,
+    contentBytes: Buffer.from(item.bytes).toString("base64"),
+  }));
 }
 
 async function readGraphError(response: Awaited<ReturnType<GraphFetch>>) {

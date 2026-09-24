@@ -1,11 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgreementStatus } from "@/lib/types/enums";
 import type { Database } from "@/lib/types/database";
+import { firmSigningEmailIdentity } from "@/lib/email/identity";
 import {
   SignatureWorkflowError,
+  type FirmSigningContact,
   type SignatureRequestRecord,
   type SignatureSendContext,
   type SignedAgreementDocumentRecord,
+  type SignedDocumentDeliveryRecord,
+  type SignedDocumentRecipientRole,
 } from "@/lib/signatures/types";
 
 export type SignatureAuditInput = {
@@ -162,6 +166,22 @@ export interface SignatureStore {
     signatureRequestId: string;
     payload: Record<string, unknown>;
   }): Promise<void>;
+  loadFirmSigningContact(firmId: string): Promise<FirmSigningContact | null>;
+  downloadSignedPdf(storagePath: string): Promise<Uint8Array | null>;
+  loadDelivery(
+    signedDocumentId: string,
+    recipientRole: SignedDocumentRecipientRole,
+  ): Promise<SignedDocumentDeliveryRecord | null>;
+  listDeliveries(
+    firmId: string,
+    signedDocumentId: string,
+  ): Promise<SignedDocumentDeliveryRecord[]>;
+  upsertDelivery(
+    input: Omit<SignedDocumentDeliveryRecord, "createdAt" | "updatedAt"> & {
+      createdAt?: string;
+      updatedAt?: string;
+    },
+  ): Promise<SignedDocumentDeliveryRecord>;
 }
 
 export function createSupabaseSignatureStore(
@@ -171,11 +191,11 @@ export function createSupabaseSignatureStore(
     async loadSendContext(firmId, agreementId) {
       const { data: agreement } = await supabase
         .from("costs_agreements")
-        .select("id, firm_id, status")
+        .select("id, firm_id, status, discarded_at")
         .eq("id", agreementId)
         .eq("firm_id", firmId)
         .maybeSingle();
-      if (!agreement) {
+      if (!agreement || agreement.discarded_at) {
         return null;
       }
 
@@ -519,11 +539,105 @@ export function createSupabaseSignatureStore(
         throw new SignatureWorkflowError(error.message);
       }
     },
+    async loadFirmSigningContact(firmId) {
+      const { data } = await supabase
+        .from("firms")
+        .select(
+          "name, practice_name, signing_sender_name, signing_sender_email, signing_reply_to_email",
+        )
+        .eq("id", firmId)
+        .maybeSingle();
+      if (!data) {
+        return null;
+      }
+      return firmSigningEmailIdentity(data);
+    },
+    async downloadSignedPdf(storagePath) {
+      const { data, error } = await supabase.storage
+        .from("signed-agreements")
+        .download(storagePath);
+      if (error || !data) {
+        return null;
+      }
+      return new Uint8Array(await data.arrayBuffer());
+    },
+    async loadDelivery(signedDocumentId, recipientRole) {
+      const { data } = await supabase
+        .from("signed_document_deliveries")
+        .select("*")
+        .eq("signed_document_id", signedDocumentId)
+        .eq("recipient_role", recipientRole)
+        .maybeSingle();
+      return data ? fromDeliveryRow(data) : null;
+    },
+    async listDeliveries(firmId, signedDocumentId) {
+      const { data, error } = await supabase
+        .from("signed_document_deliveries")
+        .select("*")
+        .eq("firm_id", firmId)
+        .eq("signed_document_id", signedDocumentId)
+        .order("recipient_role", { ascending: true });
+      if (error) {
+        throw new SignatureWorkflowError(error.message);
+      }
+      return (data ?? []).map(fromDeliveryRow);
+    },
+    async upsertDelivery(input) {
+      const existing = await this.loadDelivery(input.signedDocumentId, input.recipientRole);
+      if (existing) {
+        const { data, error } = await supabase
+          .from("signed_document_deliveries")
+          .update({
+            recipient_email: input.recipientEmail,
+            provider: input.provider,
+            provider_message_id: input.providerMessageId,
+            status: input.status,
+            attempt_count: input.attemptCount,
+            last_error: input.lastError,
+            sent_at: input.sentAt,
+          })
+          .eq("id", existing.id)
+          .eq("firm_id", input.firmId)
+          .select("*")
+          .single();
+        if (error || !data) {
+          throw new SignatureWorkflowError(
+            error?.message || "Unable to update signed-copy delivery.",
+          );
+        }
+        return fromDeliveryRow(data);
+      }
+      const { data, error } = await supabase
+        .from("signed_document_deliveries")
+        .insert({
+          id: input.id,
+          firm_id: input.firmId,
+          signed_document_id: input.signedDocumentId,
+          signature_request_id: input.signatureRequestId,
+          recipient_role: input.recipientRole,
+          recipient_email: input.recipientEmail,
+          provider: input.provider,
+          provider_message_id: input.providerMessageId,
+          status: input.status,
+          attempt_count: input.attemptCount,
+          last_error: input.lastError,
+          sent_at: input.sentAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        throw new SignatureWorkflowError(
+          error?.message || "Unable to record signed-copy delivery.",
+        );
+      }
+      return fromDeliveryRow(data);
+    },
   };
 }
 
 type SignatureRequestRow = Database["public"]["Tables"]["signature_requests"]["Row"];
 type SignedDocumentRow = Database["public"]["Tables"]["signed_agreement_documents"]["Row"];
+type SignedDeliveryRow = Database["public"]["Tables"]["signed_document_deliveries"]["Row"];
 
 function fromRow(row: SignatureRequestRow): SignatureRequestRecord {
   return {
@@ -593,5 +707,24 @@ function fromSignedRow(row: SignedDocumentRow): SignedAgreementDocumentRecord {
     byteSize: row.byte_size,
     signedAt: row.signed_at,
     createdAt: row.created_at,
+  };
+}
+
+function fromDeliveryRow(row: SignedDeliveryRow): SignedDocumentDeliveryRecord {
+  return {
+    id: row.id,
+    firmId: row.firm_id,
+    signedDocumentId: row.signed_document_id,
+    signatureRequestId: row.signature_request_id,
+    recipientRole: row.recipient_role,
+    recipientEmail: row.recipient_email,
+    provider: row.provider,
+    providerMessageId: row.provider_message_id,
+    status: row.status,
+    attemptCount: row.attempt_count,
+    lastError: row.last_error,
+    sentAt: row.sent_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

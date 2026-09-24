@@ -29,6 +29,7 @@ export type StampExecutionInput = {
   initialledPages: number[];
   signature: SignatureMark;
   signerName: string;
+  signerCapacity: string;
   signedDate: string;
 };
 
@@ -76,12 +77,23 @@ export async function stampExecutedPdf(input: StampExecutionInput) {
 
   const execPage = executionPageNumber(input.agreementPageCount, pages.length);
   const page = pages[execPage - 1];
+  const capacity = input.signerCapacity.trim();
+  if (!capacity) {
+    throw new SignatureWorkflowError("Enter the capacity in which you are signing.");
+  }
   await drawMark(document, page, input.signature, EXECUTION_LAYOUT.signature, font, ink);
   page.drawText(input.signerName.slice(0, 80), {
     x: EXECUTION_LAYOUT.name.x,
     y: EXECUTION_LAYOUT.name.y,
     size: 11,
     font,
+    color: ink,
+  });
+  page.drawText(capacity.slice(0, 80), {
+    x: EXECUTION_LAYOUT.capacity.x,
+    y: EXECUTION_LAYOUT.capacity.y,
+    size: 10,
+    font: labelFont,
     color: ink,
   });
   page.drawText(input.signedDate, {

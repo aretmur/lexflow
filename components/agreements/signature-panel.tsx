@@ -7,14 +7,16 @@ import {
   refreshSigningSessionAction,
   resendSignatureRequestAction,
   retrySignedDocumentAction,
+  retrySignedDocumentDeliveryAction,
   startSigningAction,
 } from "@/app/actions/signatures";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/cn";
-import { Notice } from "@/components/ui/notice";
 import { formatDocumentDateTime } from "@/lib/documents/formatters";
+import { deliveryStatusLabel } from "@/lib/signatures/signed-delivery";
+import type { SignedDocumentDeliveryRecord } from "@/lib/signatures/types";
 import type { SigningMode } from "@/lib/types/enums";
 import type { SigningActionState } from "@/lib/validations";
 
@@ -36,14 +38,19 @@ export type SignaturePanelDocument = {
   sha256: string;
 };
 
+export type SignaturePanelDelivery = Pick<
+  SignedDocumentDeliveryRecord,
+  "recipientRole" | "recipientEmail" | "status" | "lastError" | "sentAt" | "attemptCount"
+>;
+
 export function SignaturePanel({
   agreementId,
   agreementStatus,
   defaultSignerName,
   defaultSignerEmail,
-  testMode,
   request,
   signedDocument,
+  deliveries = [],
   defaultRequirePageInitials,
 }: {
   agreementId: string;
@@ -53,6 +60,7 @@ export function SignaturePanel({
   testMode: boolean;
   request: SignaturePanelRequest | null;
   signedDocument: SignaturePanelDocument | null;
+  deliveries?: SignaturePanelDelivery[];
   defaultRequirePageInitials: boolean;
 }) {
   const router = useRouter();
@@ -66,7 +74,6 @@ export function SignaturePanel({
   const [signerEmail, setSignerEmail] = useState(defaultSignerEmail);
   const [signingUrl, setSigningUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const showTestBanner = testMode || request?.testMode;
 
   useEffect(() => {
     if (!["sent", "viewed"].includes(agreementStatus) || signedDocument) {
@@ -153,11 +160,6 @@ export function SignaturePanel({
       <h2 className="font-serif text-xl">
         {signed ? "SIGNED ✓" : emailNotSent ? "EMAIL NOT SENT" : awaiting ? "Awaiting signature" : "READY TO SIGN"}
       </h2>
-      {showTestBanner ? (
-        <Notice tone="warning">
-          {awaiting || signed ? "TEST SIGNATURE SESSION" : "TEST SIGNATURE SESSION"}
-        </Notice>
-      ) : null}
       {actionError ? <p className="text-sm text-danger">{actionError}</p> : null}
 
       {generated ? (
@@ -394,6 +396,13 @@ export function SignaturePanel({
               <dd>{formatDocumentDateTime(signedDocument.signedAt)}</dd>
             </div>
           </dl>
+          <SignedCopyDeliveries
+            deliveries={deliveries}
+            pending={pending}
+            onRetry={(role) =>
+              run(() => retrySignedDocumentDeliveryAction(agreementId, role))
+            }
+          />
           <div className="flex flex-wrap gap-3">
             <a
               href={`/agreements/${agreementId}/signed`}
@@ -413,6 +422,60 @@ export function SignaturePanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function SignedCopyDeliveries({
+  deliveries,
+  pending,
+  onRetry,
+}: {
+  deliveries: SignaturePanelDelivery[];
+  pending: boolean;
+  onRetry: (role: "client" | "firm") => void;
+}) {
+  const client = deliveries.find((row) => row.recipientRole === "client") ?? null;
+  const firm = deliveries.find((row) => row.recipientRole === "firm") ?? null;
+  return (
+    <div className="space-y-3 border border-rule bg-paper-raised px-4 py-4">
+      <p className="text-sm font-medium">Signed copies</p>
+      <DeliveryRow label="Client copy" row={client} pending={pending} onRetry={() => onRetry("client")} />
+      <DeliveryRow label="Firm copy" row={firm} pending={pending} onRetry={() => onRetry("firm")} />
+    </div>
+  );
+}
+
+function DeliveryRow({
+  label,
+  row,
+  pending,
+  onRetry,
+}: {
+  label: string;
+  row: SignaturePanelDelivery | null;
+  pending: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 text-sm">
+      <div>
+        <p>{label}</p>
+        <p className="text-ink-muted">
+          {deliveryStatusLabel(row)}
+          {row?.status === "sent" && row.sentAt
+            ? ` · ${formatDocumentDateTime(row.sentAt)}`
+            : ""}
+        </p>
+        {row?.status === "failed" && row.lastError ? (
+          <p className="text-danger">{row.lastError}</p>
+        ) : null}
+      </div>
+      {row?.status === "failed" ? (
+        <Button type="button" variant="secondary" disabled={pending} onClick={onRetry}>
+          Retry email
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

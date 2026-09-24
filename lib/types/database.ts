@@ -144,6 +144,8 @@ export type CostsAgreement = {
   required_attachment_id: string | null;
   created_at: string;
   updated_at: string;
+  discarded_at: string | null;
+  discarded_by: string | null;
 };
 
 export type AgreementVersion = {
@@ -351,6 +353,23 @@ export type SignedAgreementDocument = {
   byte_size: number;
   signed_at: string;
   created_at: string;
+};
+
+export type SignedDocumentDelivery = {
+  id: string;
+  firm_id: string;
+  signed_document_id: string;
+  signature_request_id: string;
+  recipient_role: "client" | "firm";
+  recipient_email: string;
+  provider: string | null;
+  provider_message_id: string | null;
+  status: "pending" | "sent" | "failed";
+  attempt_count: number;
+  last_error: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type SigningAuditRecord = {
@@ -570,6 +589,15 @@ export type Database = {
           created_at?: string;
         },
         Partial<SignedAgreementDocument>
+      >;
+      signed_document_deliveries: Table<
+        SignedDocumentDelivery,
+        Omit<SignedDocumentDelivery, "id" | "created_at" | "updated_at"> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        },
+        Partial<SignedDocumentDelivery>
       >;
       signing_audit_records: Table<
         SigningAuditRecord,

@@ -1,11 +1,20 @@
 import { clamp, INITIALS_FIELD_LAYOUT, type PageGeometry } from "@/lib/signatures/form-fields";
 
-/** pdf-lib origin is bottom-left. Execution fields sit on the last agreement page. */
+/** pdf-lib origin is bottom-left. Execution lines are pinned above the footer. */
 export const EXECUTION_LAYOUT = {
-  signature: { x: 54, y: 196, width: 220, height: 42 },
-  name: { x: 54, y: 158, width: 220, height: 16 },
-  date: { x: 54, y: 122, width: 160, height: 16 },
+  insetX: 54,
+  labelWidth: 72,
+  pagePaddingBottom: 72,
+  blockBottom: 52,
+  signature: { x: 126, y: 112, width: 240, height: 36 },
+  name: { x: 126, y: 94, width: 280, height: 12 },
+  capacity: { x: 126, y: 76, width: 280, height: 12 },
+  date: { x: 126, y: 58, width: 220, height: 12 },
 } as const;
+
+export function executionValueX() {
+  return EXECUTION_LAYOUT.insetX + EXECUTION_LAYOUT.labelWidth;
+}
 
 export function executionPageNumber(agreementPageCount: number, totalPages: number) {
   const page = Math.max(1, Math.min(agreementPageCount, totalPages));

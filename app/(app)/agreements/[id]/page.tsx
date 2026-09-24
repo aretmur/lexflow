@@ -15,6 +15,7 @@ import {
 import {
   loadLatestSignatureRequest,
   loadSignedAgreementDocument,
+  loadSignedDocumentDeliveries,
 } from "@/lib/signatures/load";
 import {
   firmSigningProvider,
@@ -51,6 +52,9 @@ export default async function AgreementReviewPage({
   const snapshot = version?.snapshot as AgreementSnapshot | undefined;
   const signatureRequest = await loadLatestSignatureRequest(firm.id, id);
   const signedDocument = await loadSignedAgreementDocument(firm.id, id);
+  const deliveries = signedDocument
+    ? await loadSignedDocumentDeliveries(firm.id, signedDocument.id)
+    : [];
   const activeAttachment = await loadActiveRequiredAttachment(firm.id);
 
   return (
@@ -103,6 +107,14 @@ export default async function AgreementReviewPage({
               }
             : null
         }
+        deliveries={deliveries.map((row) => ({
+          recipientRole: row.recipientRole,
+          recipientEmail: row.recipientEmail,
+          status: row.status,
+          lastError: row.lastError,
+          sentAt: row.sentAt,
+          attemptCount: row.attemptCount,
+        }))}
         hasActiveAttachment={Boolean(activeAttachment)}
         frozenAttachmentMissing={
           bundle.agreement.status === "ready" && !snapshotHasRequiredAttachment(snapshot)

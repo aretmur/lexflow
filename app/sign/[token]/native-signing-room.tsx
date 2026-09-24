@@ -115,10 +115,14 @@ function OtpStep({ token, session }: { token: string; session: OtpSession }) {
 function ReadyStep({ token, session }: { token: string; session: ReadySession }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [complete, setComplete] = useState(false);
+  const [complete, setComplete] = useState<{
+    clientCopySent: boolean;
+    clientCopyMaskedEmail: string;
+  } | null>(null);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [signerName, setSignerName] = useState(session.signerName);
   const [signedDate, setSignedDate] = useState(formatDocumentDate(new Date().toISOString()));
+  const [signerCapacity, setSignerCapacity] = useState("Client");
   const [pageScale, setPageScale] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [initialledPages, setInitialledPages] = useState<number[]>([]);
@@ -138,6 +142,7 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
     data.set("requirePageInitials", session.requirePageInitials ? "true" : "false");
     data.set("signerName", signerName);
     data.set("signedDate", signedDate);
+    data.set("signerCapacity", signerCapacity);
     data.set("signatureKind", signature.kind);
     data.set("signaturePng", signature.png);
     data.set("signatureText", signature.text);
@@ -151,7 +156,10 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
       setError(result.error);
       return;
     }
-    setComplete(true);
+    setComplete({
+      clientCopySent: Boolean(result.clientCopySent),
+      clientCopyMaskedEmail: result.clientCopyMaskedEmail ?? "",
+    });
   }
 
   if (complete) {
@@ -160,6 +168,9 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
         <h2 className="font-serif text-2xl">SIGNED SUCCESSFULLY</h2>
         <p className="text-sm leading-6 text-ink-muted">
           Your signed agreement has been received.
+          {complete.clientCopySent && complete.clientCopyMaskedEmail
+            ? ` A copy has been emailed to ${complete.clientCopyMaskedEmail}.`
+            : " A copy could not be emailed automatically. Your lawyer still has the signed agreement."}
         </p>
         <p className="text-sm leading-6 text-ink-muted">You may close this page.</p>
       </div>
@@ -267,6 +278,15 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
               id="signedDate"
               value={signedDate}
               onChange={(event) => setSignedDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="signerCapacity">Capacity</Label>
+            <Input
+              id="signerCapacity"
+              value={signerCapacity}
+              onChange={(event) => setSignerCapacity(event.target.value)}
+              placeholder="Client"
             />
           </div>
         </div>

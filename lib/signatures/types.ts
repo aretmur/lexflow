@@ -199,6 +199,35 @@ export type SignedAgreementDocumentRecord = {
   createdAt: string;
 };
 
+export const SIGNED_DOCUMENT_RECIPIENT_ROLES = ["client", "firm"] as const;
+export type SignedDocumentRecipientRole = (typeof SIGNED_DOCUMENT_RECIPIENT_ROLES)[number];
+
+export const SIGNED_DOCUMENT_DELIVERY_STATUSES = ["pending", "sent", "failed"] as const;
+export type SignedDocumentDeliveryStatus = (typeof SIGNED_DOCUMENT_DELIVERY_STATUSES)[number];
+
+export type FirmSigningContact = {
+  displayName: string;
+  senderEmail: string | null;
+  replyTo: string | null;
+};
+
+export type SignedDocumentDeliveryRecord = {
+  id: string;
+  firmId: string;
+  signedDocumentId: string;
+  signatureRequestId: string;
+  recipientRole: SignedDocumentRecipientRole;
+  recipientEmail: string;
+  provider: string | null;
+  providerMessageId: string | null;
+  status: SignedDocumentDeliveryStatus;
+  attemptCount: number;
+  lastError: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SignatureSendContext = {
   agreementId: string;
   firmId: string;

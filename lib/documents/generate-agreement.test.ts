@@ -238,9 +238,10 @@ describe("short form generation", () => {
     expect(text.includes("Hourly rate")).toBe(true);
     expect(text.includes("Estimated professional fees excluding GST")).toBe(true);
     expect(text.includes("Fixed professional fee")).toBe(false);
-    expect(text.includes("Signature: ______________________")).toBe(true);
-    expect(text.includes("Name: __________________________")).toBe(true);
-    expect(text.includes("Date: ___________________________")).toBe(true);
+    expect(text.includes("Signature:")).toBe(true);
+    expect(text.includes("Name:")).toBe(true);
+    expect(text.includes("Capacity:")).toBe(true);
+    expect(text.includes("Date:")).toBe(true);
     expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.signature)).toBe(true);
     expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.name)).toBe(true);
     expect(text.includes(DROPBOX_SIGN_TEXT_TAGS.date)).toBe(true);

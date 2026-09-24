@@ -47,3 +47,46 @@ ${input.firmName}
 Powered by Lexflow`,
   };
 }
+
+export const SIGNED_AGREEMENT_ATTACHMENT_NAME = "Signed Costs Agreement.pdf";
+
+export function signedClientCopyEmail(input: {
+  clientName: string;
+  firmName: string;
+}) {
+  return {
+    subject: `Your signed costs agreement – ${input.firmName}`,
+    text: `Hi ${input.clientName},
+
+Your costs agreement with ${input.firmName} has been signed successfully.
+
+A copy of the signed agreement is attached for your records.
+
+If you have any questions, please contact ${input.firmName}.
+
+Regards,
+
+${input.firmName}
+
+Powered by Lexflow`,
+  };
+}
+
+export function signedFirmCopyEmail(input: {
+  clientName: string;
+  signedAt: string;
+  signingMethod: string;
+}) {
+  return {
+    subject: `Signed costs agreement received – ${input.clientName}`,
+    text: `${input.clientName} has completed the Lexflow signing process.
+
+The executed costs agreement is attached.
+
+Signed:
+${input.signedAt}
+
+Signing method:
+${input.signingMethod}`,
+  };
+}

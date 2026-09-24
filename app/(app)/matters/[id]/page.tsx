@@ -75,6 +75,7 @@ export default async function MatterDetailPage({
         .select("id, status, updated_at")
         .eq("firm_id", firm.id)
         .eq("matter_id", matter.id)
+        .is("discarded_at", null)
         .order("created_at", { ascending: false }),
     ]);
 

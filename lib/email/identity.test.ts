@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firmSigningEmailIdentity } from "@/lib/email/identity";
+import { firmSignedCopyRecipient, firmSigningEmailIdentity, maskEmail } from "@/lib/email/identity";
 
 describe("firm signing email identity", () => {
   it("uses firm-level sender name, sender email and reply-to when present", () => {
@@ -32,5 +32,26 @@ describe("firm signing email identity", () => {
       senderEmail: null,
       replyTo: null,
     });
+  });
+});
+
+describe("signed copy recipient", () => {
+  it("prefers reply-to then sender", () => {
+    expect(
+      firmSignedCopyRecipient({
+        signing_reply_to_email: "intake@octagonlegal.au",
+        signing_sender_email: "noreply@octagonlegal.au",
+      }),
+    ).toBe("intake@octagonlegal.au");
+    expect(
+      firmSignedCopyRecipient({
+        signing_reply_to_email: "  ",
+        signing_sender_email: "noreply@octagonlegal.au",
+      }),
+    ).toBe("noreply@octagonlegal.au");
+  });
+
+  it("masks client addresses", () => {
+    expect(maskEmail("john@example.com")).toBe("j***@example.com");
   });
 });

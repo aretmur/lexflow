@@ -10,6 +10,8 @@ import {
 import { signingLinkEmail, signingOtpEmail } from "@/lib/email/templates";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
 import { signedAgreementStoragePath } from "@/lib/documents/pdf/storage-path";
+import { maskEmail } from "@/lib/email/identity";
+import { logServerError } from "@/lib/server-log";
 import { CONSENT_TEXT_VERSION, consentText } from "@/lib/signatures/consent";
 import { executionPageNumber } from "@/lib/signatures/execution-layout";
 import { pageGeometriesFromPdf } from "@/lib/signatures/form-fields";
@@ -29,11 +31,13 @@ import {
   publicSigningUrl,
 } from "@/lib/signatures/signing-token";
 import { stampExecutedPdf, type SignatureMark } from "@/lib/signatures/stamp";
+import { deliverSignedAgreementCopies } from "@/lib/signatures/signed-delivery";
 import type { SignatureStore } from "@/lib/signatures/store";
 import {
   SignatureWorkflowError,
   type SignatureRequestRecord,
   type SignatureSigner,
+  type SignedAgreementDocumentRecord,
   type SigningMode,
 } from "@/lib/signatures/types";
 import {
@@ -81,12 +85,19 @@ export type NativeCompleteInput = {
   consentAccepted: boolean;
   signerName: string;
   signedDate: string;
+  signerCapacity: string;
   signature: SignatureMark;
   initials: SignatureMark;
   initialledPages: number[];
   signerIp?: string | null;
   signerUserAgent?: string | null;
   now?: Date;
+};
+
+export type NativeCompleteResult = {
+  signed: SignedAgreementDocumentRecord;
+  clientCopySent: boolean;
+  clientCopyMaskedEmail: string;
 };
 
 export async function startNativeSigning(input: {
@@ -397,7 +408,13 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
   if (request.status === "signed" || request.signedAt) {
     const existing = await input.store.loadSignedDocumentByRequest(request.id);
     if (existing) {
-      return existing;
+      return finalizeNativeSigning({
+        store: input.store,
+        request,
+        signed: existing,
+        pdfBytes: (await input.store.downloadSignedPdf(existing.storagePath)) ?? new Uint8Array(),
+        now: input.now,
+      });
     }
   }
   if (!["sent", "viewed"].includes(request.status)) {
@@ -415,6 +432,10 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
   }
   if (name.data.toLowerCase() !== request.signerName.trim().toLowerCase() && name.data.length < 2) {
     throw new SignatureWorkflowError("Enter your full name.");
+  }
+  const capacity = z.string().trim().min(2).max(120).safeParse(input.signerCapacity);
+  if (!capacity.success) {
+    throw new SignatureWorkflowError("Enter the capacity in which you are signing.");
   }
 
   const context = await input.store.loadSendContext(request.firmId, request.costsAgreementId);
@@ -440,6 +461,7 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
     initialledPages: input.initialledPages,
     signature: input.signature,
     signerName: name.data,
+    signerCapacity: capacity.data,
     signedDate: input.signedDate,
   });
 
@@ -466,7 +488,13 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
   } catch (error) {
     const existing = await input.store.loadSignedDocumentByRequest(request.id);
     if (existing) {
-      return existing;
+      return finalizeNativeSigning({
+        store: input.store,
+        request,
+        signed: existing,
+        pdfBytes: (await input.store.downloadSignedPdf(existing.storagePath)) ?? stamped.bytes,
+        now,
+      });
     }
     throw error;
   }
@@ -504,6 +532,7 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
     generatedPdfSha256: expectedHash,
     signedPdfSha256: stamped.sha256,
     signerName: name.data,
+    signerCapacity: capacity.data,
     signerEmail: request.signerEmail,
     signingMethod: request.signingMode,
     emailVerifiedAt: request.emailVerifiedAt,
@@ -536,7 +565,13 @@ export async function completeNativeSigning(input: NativeCompleteInput) {
     payload: auditPayload,
   });
 
-  return signed;
+  return finalizeNativeSigning({
+    store: input.store,
+    request,
+    signed,
+    pdfBytes: stamped.bytes,
+    now,
+  });
 }
 
 export async function resendNativeSigningLink(input: {
@@ -586,6 +621,37 @@ export async function reopenNativeSigningSession(input: {
 
 function requiresOtp(request: SignatureRequestRecord) {
   return request.signingMode === "email" || !request.emailVerifiedAt;
+}
+
+async function finalizeNativeSigning(input: {
+  store: SignatureStore;
+  request: SignatureRequestRecord;
+  signed: SignedAgreementDocumentRecord;
+  pdfBytes: Uint8Array;
+  now?: Date;
+}): Promise<NativeCompleteResult> {
+  if (input.pdfBytes.byteLength > 0) {
+    try {
+      await deliverSignedAgreementCopies({
+        store: input.store,
+        request: input.request,
+        signed: input.signed,
+        pdfBytes: input.pdfBytes,
+        now: input.now,
+      });
+    } catch (error) {
+      logServerError("signed_copy_delivery_failed", {
+        requestId: input.request.id,
+        message: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }
+  const client = await input.store.loadDelivery(input.signed.id, "client");
+  return {
+    signed: input.signed,
+    clientCopySent: client?.status === "sent",
+    clientCopyMaskedEmail: maskEmail(input.request.signerEmail),
+  };
 }
 
 function requirePackPageSplit(context: {

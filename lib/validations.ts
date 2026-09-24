@@ -205,6 +205,11 @@ export type SigningActionState = FormActionState & {
   qrDataUrl?: string;
 };
 
+export type NativeSigningActionState = FormActionState & {
+  clientCopySent?: boolean;
+  clientCopyMaskedEmail?: string;
+};
+
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid input";
 }

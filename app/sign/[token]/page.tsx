@@ -40,14 +40,7 @@ export default async function PublicSignPage({
           <h1 className="font-serif text-3xl">Review and sign your costs agreement</h1>
         </header>
         {native.status === "needs_otp" || native.status === "ready" ? (
-          <>
-            {native.testMode ? (
-              <div className="mb-6 border border-rule bg-paper-raised px-4 py-3 text-sm">
-                TEST SIGNATURE SESSION
-              </div>
-            ) : null}
-            <NativeSigningRoom token={token} session={native} />
-          </>
+          <NativeSigningRoom token={token} session={native} />
         ) : native.status !== "invalid" ? (
           <SigningMessage status={native.status} />
         ) : (
@@ -69,21 +62,6 @@ async function DropboxSigningSession({ token }: { token: string }) {
     });
   } catch {
     session = { status: "unavailable" as const };
-  }
-
-  if (session.status === "ready" && session.testMode) {
-    return (
-      <>
-        <div className="mb-6 border border-rule bg-paper-raised px-4 py-3 text-sm">
-          TEST SIGNATURE SESSION
-        </div>
-        <SigningEmbed
-          signUrl={session.signUrl}
-          clientId={session.clientId}
-          testMode={session.testMode}
-        />
-      </>
-    );
   }
 
   if (session.status === "ready") {

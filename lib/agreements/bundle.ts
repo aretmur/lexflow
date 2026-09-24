@@ -50,7 +50,7 @@ export async function loadAgreementBundle(
     .eq("id", agreementId)
     .maybeSingle();
 
-  if (!agreement) {
+  if (!agreement || agreement.discarded_at) {
     return null;
   }
   assertSameFirm(firmId, agreement.firm_id);

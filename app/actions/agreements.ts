@@ -7,6 +7,15 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { assertSameFirm } from "@/lib/tenancy";
 import { VICTORIAN_TEMPLATES, type AgreementType } from "@/lib/agreements/constants";
 import {
+  canDiscardCostsAgreement,
+  DISCARD_MISSING_ERROR,
+  DISCARD_SIGNED_ERROR,
+} from "@/lib/agreements/list";
+import { firmSigningProvider } from "@/lib/signatures/config";
+import { getSignatureProvider } from "@/lib/signatures/provider";
+import { createSupabaseSignatureStore } from "@/lib/signatures/store";
+import { cancelSignatureRequest } from "@/lib/signatures/workflow";
+import {
   bundleToDraft,
   buildSnapshot,
   loadActiveRequiredAttachment,
@@ -443,4 +452,82 @@ export async function loadDraftAction(agreementId: string) {
     return null;
   }
   return bundleToDraft(bundle);
+}
+
+export async function discardCostsAgreementAction(
+  agreementId: string,
+): Promise<FormActionState> {
+  try {
+    const { firm, user } = await requireFirm();
+    const supabase = await createServerSupabaseClient();
+    const { data: agreement } = await supabase
+      .from("costs_agreements")
+      .select("id, firm_id, status, discarded_at")
+      .eq("id", agreementId)
+      .eq("firm_id", firm.id)
+      .maybeSingle();
+
+    if (!agreement || agreement.discarded_at) {
+      return { error: DISCARD_MISSING_ERROR };
+    }
+    assertSameFirm(firm.id, agreement.firm_id);
+    if (!canDiscardCostsAgreement(agreement.status)) {
+      return { error: DISCARD_SIGNED_ERROR };
+    }
+
+    if (["sent", "viewed"].includes(agreement.status)) {
+      try {
+        await cancelSignatureRequest({
+          store: createSupabaseSignatureStore(supabase),
+          provider: getSignatureProvider(firmSigningProvider(firm.signing_provider)),
+          firmId: firm.id,
+          agreementId,
+          actorUserId: user.id,
+        });
+      } catch {
+        // Hide the agreement even if the signing session was already closed.
+      }
+    }
+
+    const { error } = await supabase
+      .from("costs_agreements")
+      .update({
+        discarded_at: new Date().toISOString(),
+        discarded_by: user.id,
+      })
+      .eq("id", agreementId)
+      .eq("firm_id", firm.id)
+      .is("discarded_at", null)
+      .neq("status", "signed");
+
+    if (error) {
+      return {
+        error: publicActionError(error.message, "Unable to delete this agreement."),
+      };
+    }
+
+    await supabase.from("audit_events").insert({
+      firm_id: firm.id,
+      actor_user_id: user.id,
+      entity_type: "costs_agreement",
+      entity_id: agreementId,
+      action: "agreement_discarded",
+      payload: { previousStatus: agreement.status },
+    });
+
+    revalidatePath("/agreements");
+    revalidatePath(`/agreements/${agreementId}`);
+    revalidatePath("/matters");
+    return { ok: true };
+  } catch (error) {
+    if (isNextNavigationError(error)) {
+      throw error;
+    }
+    return {
+      error: publicActionError(
+        error instanceof Error ? error.message : undefined,
+        "Unable to delete this agreement.",
+      ),
+    };
+  }
 }

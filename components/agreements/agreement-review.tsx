@@ -6,11 +6,13 @@ import {
   markAgreementReadyAction,
   reopenAgreementDraftAction,
   saveAgreementDraftAction,
+  discardCostsAgreementAction,
 } from "@/app/actions/agreements";
 import { generateAgreementAction } from "@/app/actions/generate-agreement";
 import {
   SignaturePanel,
   type SignaturePanelDocument,
+  type SignaturePanelDelivery,
   type SignaturePanelRequest,
 } from "@/components/agreements/signature-panel";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import {
   shortFormFeeLabel,
   shortFormReviewShowsHourlyRate,
 } from "@/lib/agreements/short-form-pricing";
+import { canDiscardCostsAgreement } from "@/lib/agreements/list";
 import { formatDocumentDate } from "@/lib/documents/formatters";
 import type { AgreementDraft } from "@/lib/validations";
 import type { Practitioner } from "@/lib/types/database";
@@ -47,6 +50,7 @@ export function AgreementReview({
   testMode,
   signatureRequest,
   signedDocument,
+  deliveries,
   hasActiveAttachment,
   frozenAttachmentMissing,
   defaultRequirePageInitials,
@@ -58,6 +62,7 @@ export function AgreementReview({
   testMode: boolean;
   signatureRequest: SignaturePanelRequest | null;
   signedDocument: SignaturePanelDocument | null;
+  deliveries: SignaturePanelDelivery[];
   hasActiveAttachment: boolean;
   frozenAttachmentMissing: boolean;
   defaultRequirePageInitials: boolean;
@@ -110,6 +115,24 @@ export function AgreementReview({
       return;
     }
     router.refresh();
+  }
+
+  async function discard() {
+    const confirmed = window.confirm(
+      "Delete this costs agreement? Signed agreements cannot be deleted.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    const result = await discardCostsAgreementAction(draft.agreementId);
+    setPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.push("/agreements");
   }
 
   return (
@@ -223,6 +246,7 @@ export function AgreementReview({
           testMode={testMode}
           request={signatureRequest}
           signedDocument={signedDocument}
+          deliveries={deliveries}
           defaultRequirePageInitials={defaultRequirePageInitials}
         />
       ) : null}
@@ -411,6 +435,11 @@ export function AgreementReview({
               Generate agreement
             </Button>
           </>
+        ) : null}
+        {canDiscardCostsAgreement(status) ? (
+          <Button type="button" variant="danger" onClick={discard} disabled={pending}>
+            Delete agreement
+          </Button>
         ) : null}
       </div>
     </div>

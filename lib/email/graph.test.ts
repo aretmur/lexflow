@@ -142,6 +142,40 @@ describe("Microsoft Graph email provider", () => {
     });
   });
 
+  it("sends a PDF as a Graph fileAttachment with base64 contentBytes", async () => {
+    const captured: { body?: string } = {};
+    const provider = new MicrosoftGraphEmailProvider(
+      sender,
+      tokens(),
+      graphFetch(async (_url, init) => {
+        captured.body = init.body;
+        return jsonResponse(202);
+      }),
+    );
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    await provider.send({
+      to: "client@example.com",
+      from: sender,
+      subject: "Your signed costs agreement",
+      text: "Attached.",
+      attachments: [
+        {
+          filename: "Signed Costs Agreement.pdf",
+          contentType: "application/pdf",
+          bytes,
+        },
+      ],
+    });
+    expect(JSON.parse(captured.body ?? "{}").message.attachments).toEqual([
+      {
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: "Signed Costs Agreement.pdf",
+        contentType: "application/pdf",
+        contentBytes: Buffer.from(bytes).toString("base64"),
+      },
+    ]);
+  });
+
   it("uses MICROSOFT_GRAPH_SENDER as reply-to when none is provided", async () => {
     const captured: { body?: string } = {};
     const provider = new MicrosoftGraphEmailProvider(

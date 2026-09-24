@@ -4,8 +4,8 @@ import { requireFirm } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Badge } from "@/components/ui/badge";
-import { Table, Td, Th } from "@/components/ui/table";
+import { AgreementsList } from "@/components/agreements/agreements-list";
+import { groupAgreementsByMonth } from "@/lib/agreements/list";
 import { VICTORIAN_TEMPLATES } from "@/lib/agreements/constants";
 
 export const metadata: Metadata = {
@@ -17,9 +17,10 @@ export default async function AgreementsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: agreements, error } = await supabase
     .from("costs_agreements")
-    .select("id, status, updated_at, matter_id, agreement_type")
+    .select("id, status, created_at, updated_at, matter_id, agreement_type")
     .eq("firm_id", firm.id)
-    .order("updated_at", { ascending: false });
+    .is("discarded_at", null)
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
@@ -45,12 +46,26 @@ export default async function AgreementsPage() {
 
   const matterById = new Map((matters ?? []).map((matter) => [matter.id, matter]));
   const clientById = new Map((clients ?? []).map((client) => [client.id, client]));
+  const groups = groupAgreementsByMonth(
+    (agreements ?? []).map((agreement) => {
+      const matter = matterById.get(agreement.matter_id);
+      const client = matter ? clientById.get(matter.client_id) : undefined;
+      return {
+        id: agreement.id,
+        clientName: client?.display_name ?? "—",
+        matterLabel: matter ? `${matter.matter_number} · ${matter.matter_title}` : "—",
+        typeLabel: VICTORIAN_TEMPLATES[agreement.agreement_type].label,
+        status: agreement.status,
+        createdAt: agreement.created_at,
+      };
+    }),
+  );
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Agreements"
-        description="Victorian short-form and staged costs agreements. Generate a pack from a frozen snapshot. Signing is not yet available."
+        description="Victorian short-form and staged costs agreements, grouped by the month they were created. Incorrect drafts can be deleted; signed agreements are kept."
         actions={
           <Link
             href="/agreements/new"
@@ -66,38 +81,7 @@ export default async function AgreementsPage() {
           description="Create a short-form or full/staged agreement. Client and matter details are collected in that flow."
         />
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Client</Th>
-              <Th>Matter</Th>
-              <Th>Type</Th>
-              <Th>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {agreements.map((agreement) => {
-              const matter = matterById.get(agreement.matter_id);
-              const client = matter ? clientById.get(matter.client_id) : undefined;
-              return (
-                <tr key={agreement.id}>
-                  <Td>
-                    <Link href={`/agreements/${agreement.id}`} className="hover:underline">
-                      {client?.display_name ?? "—"}
-                    </Link>
-                  </Td>
-                  <Td>
-                    {matter ? `${matter.matter_number} · ${matter.matter_title}` : "—"}
-                  </Td>
-                  <Td>{VICTORIAN_TEMPLATES[agreement.agreement_type].label}</Td>
-                  <Td>
-                    <Badge>{agreement.status.replaceAll("_", " ")}</Badge>
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
+        <AgreementsList groups={groups} />
       )}
     </div>
   );

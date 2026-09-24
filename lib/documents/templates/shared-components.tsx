@@ -2,6 +2,7 @@ import { Image, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { DocumentModel } from "@/lib/documents/document-types";
 import { displayOrDash, joinAddress } from "@/lib/documents/formatters";
 import { PRIVATE_AND_CONFIDENTIAL } from "@/lib/documents/templates/vic/wording";
+import { EXECUTION_LAYOUT } from "@/lib/signatures/execution-layout";
 import { DROPBOX_SIGN_TEXT_TAGS } from "@/lib/signatures/text-tags";
 
 export const colors = {
@@ -18,7 +19,7 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.ink,
     paddingTop: 54,
-    paddingBottom: 60,
+    paddingBottom: EXECUTION_LAYOUT.pagePaddingBottom,
     paddingHorizontal: 54,
     lineHeight: 1.4,
   },
@@ -277,22 +278,52 @@ export function TotalsRow({
 
 export function ExecutionBlock({ wording }: { wording: string }) {
   return (
-    <View>
+    <View wrap={false} style={{ marginTop: 18 }}>
       <Text style={styles.heading}>Execution</Text>
       <Text style={styles.paragraph}>{wording}</Text>
-      <View style={styles.signatureField} wrap={false}>
-        <Text style={styles.signatureLine}>Signature: ______________________</Text>
-        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.signature}</Text>
-      </View>
-      <View style={styles.signatureField} wrap={false}>
-        <Text style={styles.signatureLine}>Name: __________________________</Text>
-        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.name}</Text>
-      </View>
-      <Text style={styles.signatureLine}>Capacity: _______________________</Text>
-      <View style={styles.signatureField} wrap={false}>
-        <Text style={styles.signatureLine}>Date: ___________________________</Text>
-        <Text style={styles.hiddenTag}>{DROPBOX_SIGN_TEXT_TAGS.date}</Text>
-      </View>
+      <ExecutionLine
+        label="Signature:"
+        tag={DROPBOX_SIGN_TEXT_TAGS.signature}
+        height={EXECUTION_LAYOUT.signature.height}
+      />
+      <ExecutionLine label="Name:" tag={DROPBOX_SIGN_TEXT_TAGS.name} height={20} />
+      <ExecutionLine label="Capacity:" height={20} />
+      <ExecutionLine label="Date:" tag={DROPBOX_SIGN_TEXT_TAGS.date} height={20} />
+    </View>
+  );
+}
+
+function ExecutionLine({
+  label,
+  tag,
+  height,
+}: {
+  label: string;
+  tag?: string;
+  height: number;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-end",
+        height,
+        marginTop: 2,
+      }}
+      wrap={false}
+    >
+      <Text style={{ width: EXECUTION_LAYOUT.labelWidth, fontFamily: "Helvetica", fontSize: 10 }}>
+        {label}
+      </Text>
+      <View
+        style={{
+          flex: 1,
+          borderBottomWidth: 0.7,
+          borderBottomColor: colors.rule,
+          height: height - 4,
+        }}
+      />
+      {tag ? <Text style={styles.hiddenTag}>{tag}</Text> : null}
     </View>
   );
 }

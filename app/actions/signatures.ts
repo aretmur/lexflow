@@ -12,6 +12,7 @@ import { signingQrDataUrl } from "@/lib/signatures/qr";
 import { createSupabaseSignatureStore } from "@/lib/signatures/store";
 import { firmSigningEmailIdentity } from "@/lib/email/identity";
 import { resendNativeSigningLink, reopenNativeSigningSession, startNativeSigning } from "@/lib/signatures/native-workflow";
+import { retrySignedDocumentDelivery } from "@/lib/signatures/signed-delivery";
 import {
   cancelSignatureRequest,
   refreshEmbeddedSigningSession,
@@ -25,6 +26,7 @@ import {
   SignatureWorkflowError,
   type SigningMode,
 } from "@/lib/signatures/types";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isNextNavigationError, publicActionError } from "@/lib/server-log";
 import type { FormActionState, SigningActionState } from "@/lib/validations";
@@ -276,5 +278,28 @@ export async function retrySignedDocumentAction(
     return { ok: true };
   } catch (error) {
     return actionError(error, "Unable to retrieve the signed agreement.");
+  }
+}
+
+export async function retrySignedDocumentDeliveryAction(
+  agreementId: string,
+  recipientRole: "client" | "firm",
+): Promise<FormActionState> {
+  try {
+    const { firm, user } = await requireFirm();
+    if (recipientRole !== "client" && recipientRole !== "firm") {
+      return { error: "Choose which signed copy to resend." };
+    }
+    await retrySignedDocumentDelivery({
+      store: createSupabaseSignatureStore(createAdminSupabaseClient()),
+      firmId: firm.id,
+      agreementId,
+      recipientRole,
+      actorUserId: user.id,
+    });
+    refreshAgreement(agreementId);
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Unable to resend the signed agreement.");
   }
 }

@@ -118,6 +118,8 @@ function fixedFeeBundle(): AgreementBundle {
       required_attachment_id: null,
       created_at: now,
       updated_at: now,
+      discarded_at: null,
+      discarded_by: null,
     },
     client: {
       id: "aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa",

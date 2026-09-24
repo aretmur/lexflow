@@ -1,9 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { sha256Hex } from "@/lib/documents/pdf/hash";
+import { firmSigningEmailIdentity } from "@/lib/email/identity";
 import type { SignatureStore } from "@/lib/signatures/store";
 import {
   SignatureWorkflowError,
+  type FirmSigningContact,
   type SignatureRequestRecord,
   type SignedAgreementDocumentRecord,
+  type SignedDocumentDeliveryRecord,
 } from "@/lib/signatures/types";
 
 export const FIRM = "11111111-1111-1111-1111-111111111111";
@@ -20,9 +24,11 @@ export function memoryStore(initial?: {
   packPageCount?: number;
   agreementPageCount?: number | null;
   attachmentPageCount?: number | null;
+  signingContact?: FirmSigningContact | null;
 }): SignatureStore & {
   requests: SignatureRequestRecord[];
   documents: SignedAgreementDocumentRecord[];
+  deliveries: SignedDocumentDeliveryRecord[];
   events: string[];
   audits: string[];
   agreementStatus: string;
@@ -32,6 +38,7 @@ export function memoryStore(initial?: {
   const state = {
     requests: [] as SignatureRequestRecord[],
     documents: [] as SignedAgreementDocumentRecord[],
+    deliveries: [] as SignedDocumentDeliveryRecord[],
     events: [] as string[],
     audits: [] as string[],
     agreementStatus: initial?.agreementStatus ?? "generated",
@@ -39,11 +46,20 @@ export function memoryStore(initial?: {
     uploadedBytes: [] as Uint8Array[],
     packBytes: initial?.packBytes ?? new Uint8Array([37, 80, 68, 70]),
     firmId: initial?.firmId ?? FIRM,
+    signingContact:
+      initial?.signingContact === undefined
+        ? firmSigningEmailIdentity({
+            name: "Example Law",
+            signing_sender_email: "intake@example.com",
+            signing_reply_to_email: "intake@example.com",
+          })
+        : initial.signingContact,
   };
 
   const store: SignatureStore & {
     requests: SignatureRequestRecord[];
     documents: SignedAgreementDocumentRecord[];
+    deliveries: SignedDocumentDeliveryRecord[];
     events: string[];
     audits: string[];
     agreementStatus: string;
@@ -218,6 +234,59 @@ export function memoryStore(initial?: {
     },
     async insertSigningAudit() {
       return;
+    },
+    async loadFirmSigningContact() {
+      return state.signingContact;
+    },
+    async downloadSignedPdf(storagePath) {
+      const index = state.uploads.indexOf(storagePath);
+      if (index < 0) {
+        return null;
+      }
+      return state.uploadedBytes[index] ?? null;
+    },
+    async loadDelivery(signedDocumentId, recipientRole) {
+      return (
+        state.deliveries.find(
+          (row) =>
+            row.signedDocumentId === signedDocumentId && row.recipientRole === recipientRole,
+        ) ?? null
+      );
+    },
+    async listDeliveries(firmId, signedDocumentId) {
+      return state.deliveries.filter(
+        (row) => row.firmId === firmId && row.signedDocumentId === signedDocumentId,
+      );
+    },
+    async upsertDelivery(input) {
+      const now = new Date().toISOString();
+      const index = state.deliveries.findIndex(
+        (row) =>
+          row.signedDocumentId === input.signedDocumentId &&
+          row.recipientRole === input.recipientRole,
+      );
+      const record: SignedDocumentDeliveryRecord = {
+        id: input.id || (index >= 0 ? state.deliveries[index].id : randomUUID()),
+        firmId: input.firmId,
+        signedDocumentId: input.signedDocumentId,
+        signatureRequestId: input.signatureRequestId,
+        recipientRole: input.recipientRole,
+        recipientEmail: input.recipientEmail,
+        provider: input.provider,
+        providerMessageId: input.providerMessageId,
+        status: input.status,
+        attemptCount: input.attemptCount,
+        lastError: input.lastError,
+        sentAt: input.sentAt,
+        createdAt: index >= 0 ? state.deliveries[index].createdAt : now,
+        updatedAt: now,
+      };
+      if (index >= 0) {
+        state.deliveries[index] = record;
+      } else {
+        state.deliveries.push(record);
+      }
+      return record;
     },
   };
 

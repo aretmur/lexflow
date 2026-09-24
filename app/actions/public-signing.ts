@@ -11,7 +11,7 @@ import type { SignatureMark } from "@/lib/signatures/stamp";
 import { SignatureWorkflowError } from "@/lib/signatures/types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { isNextNavigationError, publicActionError } from "@/lib/server-log";
-import type { FormActionState } from "@/lib/validations";
+import type { FormActionState, NativeSigningActionState } from "@/lib/validations";
 
 function actionError(error: unknown, fallback: string): FormActionState {
   if (isNextNavigationError(error)) {
@@ -65,7 +65,7 @@ export async function verifySigningOtpAction(
 
 export async function completeNativeSigningAction(
   formData: FormData,
-): Promise<FormActionState> {
+): Promise<NativeSigningActionState> {
   try {
     const token = String(formData.get("token") ?? "");
     const headerStore = await headers();
@@ -80,12 +80,13 @@ export async function completeNativeSigningAction(
     } catch {
       throw new SignatureWorkflowError("Initialled pages could not be read.");
     }
-    await completeNativeSigning({
+    const completed = await completeNativeSigning({
       store: store(),
       token,
       consentAccepted: formData.get("consentAccepted") === "true",
       signerName: String(formData.get("signerName") ?? ""),
       signedDate: String(formData.get("signedDate") ?? ""),
+      signerCapacity: String(formData.get("signerCapacity") ?? ""),
       signature: parseMark(
         String(formData.get("signatureKind") ?? ""),
         String(formData.get("signaturePng") ?? ""),
@@ -105,7 +106,11 @@ export async function completeNativeSigningAction(
       signerIp: forwarded || headerStore.get("x-real-ip"),
       signerUserAgent: headerStore.get("user-agent"),
     });
-    return { ok: true };
+    return {
+      ok: true,
+      clientCopySent: completed.clientCopySent,
+      clientCopyMaskedEmail: completed.clientCopyMaskedEmail,
+    };
   } catch (error) {
     return actionError(error, "Unable to complete signing.");
   }
