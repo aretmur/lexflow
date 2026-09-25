@@ -50,6 +50,7 @@ export async function overlayExecutionFrame(pdfBytes: Uint8Array, wording: strin
     return pdfBytes;
   }
   const page = pages[pages.length - 1];
+  page.translateContent(0, 0);
   const times = await document.embedFont(StandardFonts.TimesRoman);
   const timesBold = await document.embedFont(StandardFonts.TimesRomanBold);
   const helvetica = await document.embedFont(StandardFonts.Helvetica);
