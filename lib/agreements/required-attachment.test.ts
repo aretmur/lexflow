@@ -144,6 +144,8 @@ describe("legacy ready agreement without attachment", () => {
 
     expect(snapshotHasRequiredAttachment(readyVersion.snapshot)).toBe(false);
     expect(reopenReadyAgreementStatus("ready")).toBe("draft");
+    expect(reopenReadyAgreementStatus("generated")).toBe("draft");
+    expect(reopenReadyAgreementStatus("sent")).toBeNull();
     expect(readyVersion.snapshot.attachment).toBe(null);
     expect(readyVersion.status).toBe("issued");
 

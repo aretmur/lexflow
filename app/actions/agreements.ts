@@ -51,6 +51,7 @@ import {
   logServerError,
   publicActionError,
 } from "@/lib/server-log";
+import { generateAgreementAction } from "@/app/actions/generate-agreement";
 
 export async function createAgreementDraftAction(
   _previous: FormActionState,
@@ -215,6 +216,32 @@ export async function markAgreementReadyAction(payload: unknown) {
   revalidatePath(`/agreements/${parsed.data.agreementId}`);
   revalidatePath("/agreements");
   return { ok: true };
+}
+
+export async function prepareAgreementForReviewAction(payload: unknown) {
+  const parsed = agreementReadySchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: firstIssue(parsed.error) };
+  }
+
+  const { firm } = await requireFirm();
+  const bundle = await loadAgreementBundle(firm.id, parsed.data.agreementId);
+  if (!bundle) {
+    return { error: "Agreement not found." };
+  }
+
+  if (["sent", "viewed", "signed"].includes(bundle.agreement.status)) {
+    return { ok: true };
+  }
+
+  if (bundle.agreement.status === "draft") {
+    const ready = await markAgreementReadyAction(parsed.data);
+    if (ready.error) {
+      return ready;
+    }
+  }
+
+  return generateAgreementAction(parsed.data.agreementId);
 }
 
 export async function reopenAgreementDraftAction(agreementId: string) {

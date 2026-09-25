@@ -22,6 +22,7 @@ import {
   isDropboxSignTestMode,
   isSigningTestMode,
 } from "@/lib/signatures/config";
+import { generateAgreementAction } from "@/app/actions/generate-agreement";
 import { PageHeader } from "@/components/layout/page-header";
 import { AgreementReview } from "@/components/agreements/agreement-review";
 import type { AgreementSnapshot } from "@/lib/agreements/snapshot";
@@ -47,9 +48,19 @@ export default async function AgreementReviewPage({
   }
 
   const draft = bundleToDraft(bundle);
-  const pack = await loadLatestGeneratedPack(firm.id, id);
   const version = await loadLatestIssuedVersion(firm.id, id);
   const snapshot = version?.snapshot as AgreementSnapshot | undefined;
+  if (
+    bundle.agreement.status === "ready" &&
+    snapshotHasRequiredAttachment(snapshot)
+  ) {
+    await generateAgreementAction(id);
+  }
+  const pack = await loadLatestGeneratedPack(firm.id, id);
+  const latestBundle = await loadAgreementBundle(firm.id, id);
+  if (!latestBundle) {
+    notFound();
+  }
   const signatureRequest = await loadLatestSignatureRequest(firm.id, id);
   const signedDocument = await loadSignedAgreementDocument(firm.id, id);
   const deliveries = signedDocument
@@ -61,11 +72,11 @@ export default async function AgreementReviewPage({
     <div className="space-y-8">
       <PageHeader
         title={draft.matter.title || "Untitled matter"}
-        description={headerDescription(bundle.agreement.status)}
+        description={headerDescription(latestBundle.agreement.status)}
       />
       <AgreementReview
         draft={draft}
-        status={bundle.agreement.status}
+        status={latestBundle.agreement.status}
         practitioner={bundle.practitioner}
         pack={
           pack
@@ -117,7 +128,7 @@ export default async function AgreementReviewPage({
         }))}
         hasActiveAttachment={Boolean(activeAttachment)}
         frozenAttachmentMissing={
-          bundle.agreement.status === "ready" && !snapshotHasRequiredAttachment(snapshot)
+          latestBundle.agreement.status === "ready" && !snapshotHasRequiredAttachment(snapshot)
         }
         defaultRequirePageInitials={firm.require_page_initials !== false}
       />
@@ -127,7 +138,7 @@ export default async function AgreementReviewPage({
 
 function headerDescription(status: string) {
   if (status === "generated") {
-    return "READY TO SIGN. Confirm the client details and start signing.";
+    return "Check the pack, then send a signing link or sign on this device.";
   }
   if (status === "sent" || status === "viewed") {
     return "Signing in progress. The lawyer screen updates when the client signs.";
@@ -136,7 +147,7 @@ function headerDescription(status: string) {
     return "This costs agreement has been signed. The original generated pack remains available.";
   }
   if (status === "ready") {
-    return "Snapshot is frozen. Generate the agreement pack, or edit to create a new version.";
+    return "The agreement pack is being prepared. Refresh if it does not appear.";
   }
-  return "Review the agreement before generating and sending for signature.";
+  return "Review the figures, then send the agreement for signature.";
 }

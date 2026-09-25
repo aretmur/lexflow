@@ -120,18 +120,37 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
     clientCopyMaskedEmail: string;
   } | null>(null);
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [pageScale, setPageScale] = useState(1);
   const [signerName, setSignerName] = useState(session.signerName);
   const [signedDate, setSignedDate] = useState(formatDocumentDate(new Date().toISOString()));
   const [signerCapacity, setSignerCapacity] = useState("Client");
-  const [pageScale, setPageScale] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [initialledPages, setInitialledPages] = useState<number[]>([]);
-  const [initials, setInitials] = useState<CapturedMark>({ kind: "draw", png: "", text: "" });
-  const [signature, setSignature] = useState<CapturedMark>({ kind: "draw", png: "", text: "" });
+  const [initials, setInitials] = useState<CapturedMark>({
+    kind: "type",
+    png: "",
+    text: session.signerName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 4)
+      .toUpperCase(),
+  });
+  const [signature, setSignature] = useState<CapturedMark>({
+    kind: "type",
+    png: "",
+    text: session.signerName,
+  });
 
   async function submit() {
-    if (session.requirePageInitials && initialledPages.length !== session.pageCount) {
-      setError("Initial every page of the agreement, including the information sheet.");
+    const pages = session.requirePageInitials
+      ? Array.from({ length: session.pageCount }, (_, index) => index + 1)
+      : [];
+    if (session.requirePageInitials && !hasMark(initials)) {
+      setError("Add your initials before signing.");
+      return;
+    }
+    if (!hasMark(signature)) {
+      setError("Add your signature before signing.");
       return;
     }
     setPending(true);
@@ -149,7 +168,7 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
     data.set("initialsKind", initials.kind);
     data.set("initialsPng", initials.png);
     data.set("initialsText", initials.text);
-    data.set("initialledPages", JSON.stringify(initialledPages));
+    data.set("initialledPages", JSON.stringify(pages));
     const result = await completeNativeSigningAction(data);
     setPending(false);
     if (result.error) {
@@ -207,56 +226,12 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
 
       {session.requirePageInitials ? (
         <div className="space-y-4 border border-rule bg-paper-raised px-4 py-5">
-          <h2 className="font-serif text-xl">Initial every page</h2>
+          <h2 className="font-serif text-xl">Initials</h2>
           <p className="text-sm leading-6 text-ink-muted">
-            Page {currentPage} of {session.pageCount}. Initials are placed at the
-            bottom right of each page, including Legal Services Council pages.
+            These initials are applied to every page of the agreement pack,
+            including the information sheet.
           </p>
           <MarkPad label="Initials" value={initials} onChange={setInitials} compact />
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (!hasMark(initials)) {
-                  setError("Draw or type your initials first.");
-                  return;
-                }
-                setError(null);
-                setInitialledPages((pages) =>
-                  pages.includes(currentPage) ? pages : [...pages, currentPage].sort((a, b) => a - b),
-                );
-                setCurrentPage((page) => Math.min(session.pageCount, page + 1));
-              }}
-            >
-              Initial this page
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                if (!hasMark(initials)) {
-                  setError("Draw or type your initials first.");
-                  return;
-                }
-                const confirmed = window.confirm(
-                  "Apply these initials to every required page of the agreement, including the information sheet?",
-                );
-                if (!confirmed) {
-                  return;
-                }
-                setError(null);
-                setInitialledPages(
-                  Array.from({ length: session.pageCount }, (_, index) => index + 1),
-                );
-              }}
-            >
-              Apply these initials to every required page
-            </Button>
-          </div>
-          <p className="text-sm text-ink-muted">
-            Initialled {initialledPages.length} of {session.pageCount} pages.
-          </p>
         </div>
       ) : null}
 
@@ -303,7 +278,7 @@ function ReadyStep({ token, session }: { token: string; session: ReadySession })
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="button" className="h-12 px-6 text-base" disabled={pending} onClick={submit}>
-        {pending ? "Signing…" : "Complete signing"}
+        {pending ? "Signing…" : "Sign"}
       </Button>
     </div>
   );

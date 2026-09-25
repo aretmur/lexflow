@@ -48,5 +48,5 @@ export function nextAgreementVersionNumber(lastVersionNumber: number | null | un
 }
 
 export function reopenReadyAgreementStatus(status: string): "draft" | null {
-  return status === "ready" ? "draft" : null;
+  return status === "ready" || status === "generated" ? "draft" : null;
 }

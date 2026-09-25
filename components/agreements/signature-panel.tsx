@@ -165,80 +165,69 @@ export function SignaturePanel({
       {generated ? (
         <div className="space-y-5">
           <p className="text-sm text-ink-muted">
-            Confirm the client details, then choose how they should sign. The
-            client does not need a Lexflow account.
+            The client details come from the agreement. Send a link, or sign on this
+            device. The client does not need a Lexflow account.
           </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="signerName">Client name</Label>
-              <Input
-                id="signerName"
-                name="signerName"
-                value={signerName}
-                onChange={(event) => setSignerName(event.target.value)}
-                required
-              />
+          {(!defaultSignerName.trim() || !defaultSignerEmail.trim()) ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {!defaultSignerName.trim() ? (
+                <div className="space-y-2">
+                  <Label htmlFor="signerName">Client name</Label>
+                  <Input
+                    id="signerName"
+                    name="signerName"
+                    value={signerName}
+                    onChange={(event) => setSignerName(event.target.value)}
+                    required
+                  />
+                </div>
+              ) : null}
+              {!defaultSignerEmail.trim() ? (
+                <div className="space-y-2">
+                  <Label htmlFor="signerEmail">Client email</Label>
+                  <Input
+                    id="signerEmail"
+                    name="signerEmail"
+                    type="email"
+                    value={signerEmail}
+                    onChange={(event) => setSignerEmail(event.target.value)}
+                    required
+                  />
+                </div>
+              ) : null}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signerEmail">Client email</Label>
-              <Input
-                id="signerEmail"
-                name="signerEmail"
-                type="email"
-                value={signerEmail}
-                onChange={(event) => setSignerEmail(event.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <InitialsToggle
-            enabled={requirePageInitials}
-            onChange={setRequirePageInitials}
-          />
-          <div className="space-y-3">
-            <p className="text-sm font-medium">How should the client sign?</p>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                className="h-12 px-6 text-base"
-                disabled={pending}
-                onClick={() => start("qr")}
-              >
-                {pending ? "Starting…" : "Show QR code"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={pending}
-                onClick={() => start("email")}
-              >
-                Email signing link
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => start("same_device")}
-              >
-                Sign on this device
-              </Button>
-              <a
-                href={`/agreements/${agreementId}/pack`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-10 items-center px-4 text-sm font-medium text-ink-muted hover:text-ink"
-              >
-                View PDF
-              </a>
-              <a
-                href={`/agreements/${agreementId}/pack?download=1`}
-                className="inline-flex h-10 items-center px-4 text-sm font-medium text-ink-muted hover:text-ink"
-              >
-                Download PDF
-              </a>
-            </div>
+          ) : null}
+          {defaultRequirePageInitials ? (
+            <InitialsToggle
+              enabled={requirePageInitials}
+              onChange={setRequirePageInitials}
+            />
+          ) : null}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              className="h-12 px-6 text-base"
+              disabled={pending || !signerEmail.trim()}
+              onClick={() => start("email")}
+            >
+              {pending ? "Sending…" : "Send signing link"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={() => start("same_device")}
+            >
+              Sign on this device
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => start("qr")}
+            >
+              Show QR code
+            </Button>
           </div>
         </div>
       ) : null}
@@ -297,8 +286,8 @@ export function SignaturePanel({
                 className="h-64 w-64 bg-paper-raised"
               />
               <p className="text-sm text-ink-muted">
-                The client reviews the agreement, initials every required page,
-                then signs. They do not need a Lexflow account.
+                The client reviews the agreement on their phone, then signs. They
+                do not need a Lexflow account.
               </p>
             </div>
           ) : null}

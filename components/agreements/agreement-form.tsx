@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveAgreementDraftAction } from "@/app/actions/agreements";
+import { saveAgreementDraftAction, prepareAgreementForReviewAction } from "@/app/actions/agreements";
 import { createSerialSaveQueue } from "@/lib/agreements/draft-save-queue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +137,15 @@ export function AgreementForm({
       setError(result.error);
       return;
     }
+    setSaveState("Preparing pack…");
+    const prepared = await prepareAgreementForReviewAction(latest);
+    if (prepared.error) {
+      reviewingRef.current = false;
+      setReviewing(false);
+      setSaveState("Saved");
+      setError(prepared.error);
+      return;
+    }
     router.push(`/agreements/${latest.agreementId}`);
   }
 
@@ -145,7 +154,7 @@ export function AgreementForm({
       <div className="flex items-center justify-between gap-4">
         <p className="text-xs uppercase tracking-[0.14em] text-ink-muted">{saveState}</p>
         <Button variant="secondary" disabled={reviewing} onClick={() => void handleReview()}>
-          {reviewing ? "Saving…" : "Review"}
+          {reviewing ? "Preparing…" : "Review"}
         </Button>
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}

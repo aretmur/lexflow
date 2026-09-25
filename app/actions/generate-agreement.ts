@@ -47,7 +47,7 @@ export async function generateAgreementAction(agreementId: string) {
     assertSameFirm(firm.id, agreement.firm_id);
 
     if (agreement.status === "draft") {
-      return { error: "Mark the agreement ready before generating." };
+      return { error: "Review the agreement before generating the pack." };
     }
     if (!["ready", "generated"].includes(agreement.status)) {
       return { error: "This agreement can no longer be generated." };

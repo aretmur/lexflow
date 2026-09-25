@@ -3,12 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  markAgreementReadyAction,
   reopenAgreementDraftAction,
   saveAgreementDraftAction,
   discardCostsAgreementAction,
 } from "@/app/actions/agreements";
-import { generateAgreementAction } from "@/app/actions/generate-agreement";
 import {
   SignaturePanel,
   type SignaturePanelDocument,
@@ -94,29 +92,6 @@ export function AgreementReview({
     router.push("/agreements");
   }
 
-  async function markReady() {
-    setPending(true);
-    const result = await markAgreementReadyAction(draft);
-    setPending(false);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    router.refresh();
-  }
-
-  async function generate() {
-    setPending(true);
-    setError(null);
-    const result = await generateAgreementAction(draft.agreementId);
-    setPending(false);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    router.refresh();
-  }
-
   async function discard() {
     const confirmed = window.confirm(
       "Delete this costs agreement? Signed agreements cannot be deleted.",
@@ -186,9 +161,23 @@ export function AgreementReview({
         </Notice>
       ) : null}
 
+      {canSend || ["sent", "viewed", "signed"].includes(status) ? (
+        <SignaturePanel
+          agreementId={draft.agreementId}
+          agreementStatus={status}
+          defaultSignerName={draft.client.fullName}
+          defaultSignerEmail={draft.client.email}
+          testMode={testMode}
+          request={signatureRequest}
+          signedDocument={signedDocument}
+          deliveries={deliveries}
+          defaultRequirePageInitials={defaultRequirePageInitials}
+        />
+      ) : null}
+
       {generated ? (
         <section className="space-y-4">
-          <h2 className="font-serif text-xl">Generated pack</h2>
+          <h2 className="font-serif text-xl">Agreement pack</h2>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-ink-muted">Agreement version</dt>
@@ -235,20 +224,6 @@ export function AgreementReview({
             className="h-[80vh] w-full border border-rule bg-paper-raised"
           />
         </section>
-      ) : null}
-
-      {canSend || ["sent", "viewed", "signed"].includes(status) ? (
-        <SignaturePanel
-          agreementId={draft.agreementId}
-          agreementStatus={status}
-          defaultSignerName={draft.client.fullName}
-          defaultSignerEmail={draft.client.email}
-          testMode={testMode}
-          request={signatureRequest}
-          signedDocument={signedDocument}
-          deliveries={deliveries}
-          defaultRequirePageInitials={defaultRequirePageInitials}
-        />
       ) : null}
 
       <section className="space-y-2">
@@ -401,40 +376,19 @@ export function AgreementReview({
       </section>
 
       <div className="flex flex-wrap gap-3">
-        {draftStatus ? (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => reopenAgreementDraftAction(draft.agreementId)}
-            >
-              Edit
-            </Button>
-            <Button type="button" variant="secondary" onClick={saveDraft} disabled={pending}>
-              Save draft
-            </Button>
-            <Button
-              type="button"
-              onClick={markReady}
-              disabled={pending || !hasActiveAttachment}
-            >
-              Mark ready
-            </Button>
-          </>
+        {draftStatus || ready || canSend ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => reopenAgreementDraftAction(draft.agreementId)}
+          >
+            Edit
+          </Button>
         ) : null}
-        {ready && !frozenAttachmentMissing ? (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => reopenAgreementDraftAction(draft.agreementId)}
-            >
-              Edit
-            </Button>
-            <Button type="button" onClick={generate} disabled={pending}>
-              Generate agreement
-            </Button>
-          </>
+        {draftStatus ? (
+          <Button type="button" variant="secondary" onClick={saveDraft} disabled={pending}>
+            Save draft
+          </Button>
         ) : null}
         {canDiscardCostsAgreement(status) ? (
           <Button type="button" variant="danger" onClick={discard} disabled={pending}>
